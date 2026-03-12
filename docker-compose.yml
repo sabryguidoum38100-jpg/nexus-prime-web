@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8080:8080"
+    environment:
+      RUST_LOG: info
+    networks:
+      - nexus-network
+
+networks:
+  nexus-network:
+    driver: bridge
