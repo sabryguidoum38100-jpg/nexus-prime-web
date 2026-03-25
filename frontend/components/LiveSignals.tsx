@@ -10,94 +10,97 @@ interface Signal {
   pick: string;
   confidence: number;
   edge_percent: number;
+  tier: number;
+  steam: boolean;
   created_at: string;
 }
 
-const MOCK_SIGNALS: Signal[] = [
-  {
-    id: '1',
-    match_id: 'PSG vs OM',
-    sport: 'Football',
-    pick: 'HOME',
-    confidence: 0.78,
-    edge_percent: 4.2,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    match_id: 'BAYERN vs DORTMUND',
-    sport: 'Football',
-    pick: 'OVER',
-    confidence: 0.72,
-    edge_percent: 3.8,
-    created_at: new Date(Date.now() - 60000).toISOString(),
-  },
-];
-
 export default function LiveSignals() {
-  const [signals, setSignals] = useState<Signal[]>(MOCK_SIGNALS);
-  const [connected, setConnected] = useState(true);
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    // Simulation WebSocket
-    const interval = setInterval(() => {
-      const newSignal: Signal = {
-        id: Math.random().toString(),
-        match_id: `Match ${Math.floor(Math.random() * 100)}`,
-        sport: 'Football',
-        pick: ['HOME', 'AWAY', 'DRAW', 'OVER', 'UNDER'][Math.floor(Math.random() * 5)],
-        confidence: 0.6 + Math.random() * 0.3,
-        edge_percent: 2 + Math.random() * 4,
-        created_at: new Date().toISOString(),
-      };
-      setSignals(prev => [newSignal, ...prev].slice(0, 10));
-    }, 3000);
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+    const wsUrl = backendUrl.replace('http', 'ws') + '/ws/live';
 
-    return () => clearInterval(interval);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      setConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'signal') {
+          const signal = data.payload;
+          setSignals((prev) => [signal, ...prev].slice(0, 10));
+        }
+      } catch (e) {
+        console.error('Failed to parse WS message:', e);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setConnected(false);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      setConnected(false);
+    };
+
+    return () => ws.close();
   }, []);
 
+  const getTierColor = (tier: number) => {
+    if (tier === 1) return 'bg-green-500';
+    if (tier === 2) return 'bg-blue-500';
+    return 'bg-gray-500';
+  };
+
+  const getTierLabel = (tier: number) => {
+    if (tier === 1) return 'ELITE';
+    if (tier === 2) return 'PRO';
+    return 'INFO';
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
-        <div className={`w-3 h-3 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-        <span className="text-cyan-400 font-semibold">
-          {connected ? '🟢 Connecté aux signaux temps réel' : '🔴 Déconnecté'}
-        </span>
+    <div className="w-full bg-gray-900 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold text-white">Live Signals</h2>
+        <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
       </div>
 
       <div className="space-y-3">
         {signals.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            En attente de signaux...
-          </div>
+          <p className="text-gray-400">Waiting for signals...</p>
         ) : (
           signals.map((signal, idx) => (
             <motion.div
               key={signal.id}
-              initial={{ opacity: 0, x: -20 }}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="p-4 rounded-lg bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 border border-cyan-500/30 hover:border-cyan-400/60 transition-all"
+              transition={{ delay: idx * 0.1 }}
+              className="bg-gray-800 rounded-lg p-4 border border-gray-700"
             >
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <h4 className="font-bold text-white text-lg">{signal.match_id}</h4>
-                  <p className="text-xs text-gray-400">{signal.sport}</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`px-2 py-1 rounded text-xs font-bold text-white ${getTierColor(signal.tier)}`}>
+                      {getTierLabel(signal.tier)}
+                    </span>
+                    {signal.steam && <span className="px-2 py-1 rounded text-xs font-bold bg-yellow-500 text-black">STEAM</span>}
+                  </div>
+                  <p className="text-white font-semibold">{signal.match_id}</p>
+                  <p className="text-gray-400 text-sm">{signal.pick}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-emerald-400">{signal.pick}</p>
-                  <p className="text-xs text-gray-400">
-                    {new Date(signal.created_at).toLocaleTimeString()}
-                  </p>
+                  <p className="text-green-400 font-bold">{signal.edge_percent.toFixed(2)}% Edge</p>
+                  <p className="text-gray-400 text-sm">{(signal.confidence * 100).toFixed(0)}% Conf</p>
                 </div>
-              </div>
-              <div className="flex gap-4 mt-3 text-sm">
-                <span className="text-cyan-400">
-                  Confiance: {(signal.confidence * 100).toFixed(0)}%
-                </span>
-                <span className="text-emerald-400">
-                  Edge: +{signal.edge_percent.toFixed(1)}%
-                </span>
               </div>
             </motion.div>
           ))
