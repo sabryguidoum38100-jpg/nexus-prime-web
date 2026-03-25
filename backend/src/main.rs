@@ -1,13 +1,13 @@
 use std::net::SocketAddr;
 use axum::{
     extract::{ws::WebSocketUpgrade, State},
-    http::HeaderValue,
+    http::{HeaderValue, Method},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use tokio::sync::broadcast;
-use tower_http::{cors::CorsLayer, trace::TraceLayer, compression::CompressionLayer};
+use tower_http::{cors::{CorsLayer, Any}, trace::TraceLayer, compression::CompressionLayer};
 use tracing::{info, debug, warn};
 use std::sync::Arc;
 use dotenvy::dotenv;
@@ -51,9 +51,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/picks", post(api_picks_post))
         .route("/ws/live", get(ws_upgrade))
         .layer(
-            CorsLayer::very_permissive()
-                .allow_credentials(true)
-                .allow_headers([axum::http::header::CONTENT_TYPE]),
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_headers(Any),
         )
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
