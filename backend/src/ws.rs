@@ -1,25 +1,19 @@
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use tracing::{info, warn};
-
-use crate::{types::LiveSignal, AppState};
+use crate::types::AppState;
 
 pub async fn handle_ws(mut socket: WebSocket, state: AppState) {
     let mut rx = state.tx_signals.subscribe();
 
-    if socket
-        .send(Message::Text(
-            serde_json::json!({
-                "type": "hello",
-                "theme": "dark-amoled-2026",
-                "service": "nexus-prime-pronos-live",
-                "message": "Connected to live IA signals."
-            })
-            .to_string(),
-        ))
-        .await
-        .is_err()
-    {
+    let hello = serde_json::json!({
+        "type": "hello",
+        "theme": "dark-amoled-2026",
+        "service": "nexus-prime-pronos-live",
+        "message": "Connected to live ELITE signals."
+    }).to_string();
+
+    if socket.send(Message::Text(hello.into())).await.is_err() {
         return;
     }
 
@@ -27,14 +21,15 @@ pub async fn handle_ws(mut socket: WebSocket, state: AppState) {
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(sig) = rx.recv().await {
-            let msg = serde_json::json!({
-                "type": "signal",
-                "payload": sig
-            })
-            .to_string();
+            if sig.tier <= 2 {
+                let msg = serde_json::json!({
+                    "type": "signal",
+                    "payload": sig
+                }).to_string();
 
-            if sender.send(Message::Text(msg)).await.is_err() {
-                break;
+                if sender.send(Message::Text(msg.into())).await.is_err() {
+                    break;
+                }
             }
         }
     });

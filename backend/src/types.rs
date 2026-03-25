@@ -1,6 +1,19 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use tokio::sync::broadcast;
+use axum::http::HeaderValue;
+use std::sync::Arc;
+use crate::odds::OddsManager;
+use crate::inference::MultiLeagueInference;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub tx_signals: broadcast::Sender<LiveSignal>,
+    pub dark_theme_header: HeaderValue,
+    pub odds_manager: Arc<OddsManager>,
+    pub inference_engine: Arc<MultiLeagueInference>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct AiPickRequest {
@@ -11,7 +24,7 @@ pub struct AiPickRequest {
     pub risk_profile: String,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AiPickResponse {
     pub id: Uuid,
     pub match_id: String,
@@ -21,42 +34,15 @@ pub struct AiPickResponse {
     pub confidence: f32,
     pub stake: f64,
     pub edge_percent: f32,
+    pub kelly: f32,
+    pub clv: f32,
+    pub tier: u8,
+    pub steam: bool,
     pub created_at: DateTime<Utc>,
     pub model_version: String,
 }
 
-impl AiPickResponse {
-    pub fn mock_for(req: &AiPickRequest) -> Self {
-        let base_conf = match req.risk_profile.as_str() {
-            "safe" => 0.78,
-            "balanced" => 0.7,
-            "degen" => 0.62,
-            _ => 0.68,
-        };
-
-        let stake = req.bankroll * match req.risk_profile.as_str() {
-            "safe" => 0.01,
-            "balanced" => 0.02,
-            "degen" => 0.05,
-            _ => 0.015,
-        };
-
-        Self {
-            id: Uuid::new_v4(),
-            match_id: req.match_id.clone(),
-            sport: req.sport.clone(),
-            market: req.market.clone(),
-            pick: "HOME".into(),
-            confidence: base_conf,
-            stake,
-            edge_percent: 4.2,
-            created_at: Utc::now(),
-            model_version: "nexus-ia-pronos-2026".into(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LiveSignal {
     pub id: Uuid,
     pub match_id: String,
@@ -64,6 +50,8 @@ pub struct LiveSignal {
     pub pick: String,
     pub confidence: f32,
     pub edge_percent: f32,
+    pub tier: u8,
+    pub steam: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -76,6 +64,8 @@ impl LiveSignal {
             pick: r.pick.clone(),
             confidence: r.confidence,
             edge_percent: r.edge_percent,
+            tier: r.tier,
+            steam: r.steam,
             created_at: r.created_at,
         }
     }

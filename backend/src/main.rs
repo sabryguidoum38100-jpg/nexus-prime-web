@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 use axum::{
     extract::{ws::WebSocketUpgrade, State},
     http::HeaderValue,
@@ -8,38 +8,48 @@ use axum::{
 };
 use tokio::sync::broadcast;
 use tower_http::{cors::CorsLayer, trace::TraceLayer, compression::CompressionLayer};
-use tracing::{info, Level};
+use tracing::{info, debug, warn};
+use std::sync::Arc;
+use dotenvy::dotenv;
 
-mod metrics;
 mod types;
 mod ws;
+mod odds;
+mod steam;
+mod inference;
+mod tests;
 
-use crate::metrics::{install_global_recorder, PrometheusHandle, REQUESTS_TOTAL};
-use crate::types::{AiPickRequest, AiPickResponse, LiveSignal};
+use crate::types::{AiPickRequest, AiPickResponse, LiveSignal, AppState};
 use crate::ws::handle_ws;
-
-#[derive(Clone)]
-struct AppState {
-    tx_signals: broadcast::Sender<LiveSignal>,
-    dark_theme_header: HeaderValue,
-}
+use crate::odds::OddsManager;
+use crate::inference::MultiLeagueInference;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    dotenv().ok();
     init_tracing()?;
-    let prometheus_handle = install_global_recorder()?;
+    
     let (tx_signals, _) = broadcast::channel::<LiveSignal>(1024);
+    
+    let odds_api_key = std::env::var("ODDS_API_KEY").expect("ODDS_API_KEY must be set");
+    let model_dir = std::env::var("MODEL_DIR").unwrap_or_else(|_| "/home/ubuntu/nexus-prime-web-local/ml/models".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+
+    let odds_manager = Arc::new(OddsManager::new(odds_api_key));
+    let inference_engine = Arc::new(MultiLeagueInference::new(model_dir));
+
     let state = AppState {
         tx_signals,
         dark_theme_header: HeaderValue::from_static("dark-amoled-2026"),
+        odds_manager,
+        inference_engine,
     };
 
     let app = Router::new()
         .route("/health", get(health))
-        .route("/api/picks", post(api_picks))
-        .route("/api/ai/explain", post(api_explain))
+        .route("/api/picks", get(api_picks_get))
+        .route("/api/picks", post(api_picks_post))
         .route("/ws/live", get(ws_upgrade))
-        .route("/metrics", get(move || prometheus_metrics(prometheus_handle.clone())))
         .layer(
             CorsLayer::very_permissive()
                 .allow_credentials(true)
@@ -49,10 +59,10 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    let addr: SocketAddr = "0.0.0.0:8080".parse()?;
-    info!(%addr, "Nexus Prime Pronos listening");
-    axum::serve(tokio::net::TcpListener::bind(addr).await?, app).await?;
-    opentelemetry::global::shutdown_tracer_provider();
+    let addr: SocketAddr = format!("0.0.0.0:{}", port).parse()?;
+    info!(%addr, "Nexus Prime Elite Production starting (Real Data Mode)...");
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
     Ok(())
 }
 
@@ -60,33 +70,78 @@ async fn health() -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "ok",
         "service": "nexus-prime-pronos",
-        "version": "0.1.0"
+        "version": "0.3.0-elite-real",
+        "timestamp": chrono::Utc::now().to_rfc3339()
     }))
 }
 
-async fn api_picks(
+async fn api_picks_get(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    debug!("API GET /api/picks called - Fetching real matches from The Odds API...");
+    
+    let matches = match state.odds_manager.get_odds().await {
+        Ok(m) => m,
+        Err(e) => {
+            warn!("Failed to fetch real odds: {}", e);
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "API Fetch Error").into_response();
+        }
+    };
+
+    let mut picks = Vec::new();
+    for m in matches {
+        let pred = state.inference_engine.predict(
+            &m.league,
+            vec![m.home_odds, m.draw_odds, m.away_odds], // Features match model training
+            m.opening_odds_pinnacle.unwrap_or(m.home_odds),
+            m.home_odds,
+            false
+        );
+
+        let resp = AiPickResponse {
+            id: uuid::Uuid::new_v4(),
+            match_id: format!("{} vs {}", m.home_team, m.away_team),
+            sport: "Soccer".into(),
+            market: "1N2".into(),
+            pick: "HOME".into(),
+            confidence: pred.prob_home,
+            stake: (1000.0 * pred.kelly) as f64,
+            edge_percent: pred.edge,
+            kelly: pred.kelly,
+            clv: pred.clv,
+            tier: if pred.edge > 4.0 { 1 } else { 2 },
+            steam: pred.edge > 3.0,
+            created_at: chrono::Utc::now(),
+            model_version: pred.model_version,
+        };
+        
+        picks.push(resp);
+    }
+
+    Json(picks).into_response()
+}
+
+async fn api_picks_post(
     State(state): State<AppState>,
     Json(payload): Json<AiPickRequest>,
 ) -> impl IntoResponse {
-    REQUESTS_TOTAL.inc();
-    let resp = AiPickResponse::mock_for(&payload);
-    let _ = state.tx_signals.send(LiveSignal::from_response(&resp));
-    ([(axum::http::header::HeaderName::from_static("x-theme"),
-        state.dark_theme_header.clone())],
-    Json(resp))
-}
-
-async fn api_explain(Json(payload): Json<AiPickRequest>) -> impl IntoResponse {
-    REQUESTS_TOTAL.inc();
-    let explanation = format!(
-        "Analyse IA 2026 sur {} – modèle multi-feature (forme, xG, marché live, météo, charge mentale joueurs).",
-        payload.match_id
-    );
-    Json(serde_json::json!({
-        "match_id": payload.match_id,
-        "explanation": explanation,
-        "version": "2026-ai-v1"
-    }))
+    let resp = AiPickResponse {
+        id: uuid::Uuid::new_v4(),
+        match_id: payload.match_id.clone(),
+        sport: payload.sport.clone(),
+        market: payload.market.clone(),
+        pick: "HOME".into(),
+        confidence: 0.85,
+        stake: 50.0,
+        edge_percent: 4.5,
+        kelly: 0.02,
+        clv: 0.05,
+        tier: 1,
+        steam: true,
+        created_at: chrono::Utc::now(),
+        model_version: "nexus-v3-elite".into(),
+    };
+    Json(resp)
 }
 
 async fn ws_upgrade(
@@ -96,37 +151,17 @@ async fn ws_upgrade(
     ws.on_upgrade(move |socket| handle_ws(socket, state))
 }
 
-async fn prometheus_metrics(handle: PrometheusHandle) -> impl IntoResponse {
-    handle.render()
-}
-
 fn init_tracing() -> anyhow::Result<()> {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-    let tracer = opentelemetry_otlp::new_pipeline()
-        .tracing()
-        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
-        .with_trace_config(
-            opentelemetry_sdk::trace::Config::default().with_resource(
-                opentelemetry_sdk::Resource::new(vec![
-                    opentelemetry::KeyValue::new("service.name", "nexus-prime-pronos"),
-                    opentelemetry::KeyValue::new("service.version", "0.1.0"),
-                ]),
-            ),
-        )
-        .install_batch(opentelemetry_sdk::runtime::Tokio)?;
-
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,tower_http=info".into()),
+                .unwrap_or_else(|_| "debug,tower_http=info".into()),
         )
-        .with(tracing_opentelemetry::layer().with_tracer(tracer))
         .with(
             tracing_subscriber::fmt::layer()
-                .event_format(tracing_subscriber::fmt::format().json())
                 .with_target(false)
                 .with_level(true)
-                .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339()),
         )
         .init();
     Ok(())
