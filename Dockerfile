@@ -8,6 +8,6 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y libssl3 curl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/nexus-prime-pronos .
-COPY .env .
+# COPY .env . (Managed by Render Env Vars)
 EXPOSE 8080
 CMD ["./nexus-prime-pronos"]
