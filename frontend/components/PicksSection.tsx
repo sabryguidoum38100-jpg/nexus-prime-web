@@ -23,8 +23,8 @@ export default function PicksSection() {
   const fetchPicks = async () => {
     setLoading(true);
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
-      const response = await fetch(`${backendUrl}/api/picks`, { method: 'POST' });
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://nexus-prime-web.onrender.com';
+      const response = await fetch(`${backendUrl}/api/picks`, { method: 'GET' });
       const data = await response.json();
       setPicks(Array.isArray(data) ? data : [data]);
     } catch (e) {
