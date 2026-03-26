@@ -29,7 +29,8 @@ Thumbs.db
 
 # Rust
 backend/target/
-backend/Cargo.lock
+# Note: Cargo.lock is intentionally tracked to pin ort to =2.0.0-rc.10
+# and prevent Cargo from resolving to rc.12 (requires rustc 1.88)
 **/*.rs.bk
 
 # Build artifacts

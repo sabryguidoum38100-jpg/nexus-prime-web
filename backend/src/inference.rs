@@ -85,7 +85,7 @@ impl MultiLeagueInference {
         let mut used_model = false;
 
         // Normaliser le nom de la ligue pour correspondre aux modèles
-        let normalized_league = league.to_lowercase().replace(" ", "_");
+        let normalized_league = league.to_lowercase().replace(' ', "_");
         let session_key = if self.sessions.contains_key(&normalized_league) {
             normalized_league.clone()
         } else {
@@ -95,12 +95,15 @@ impl MultiLeagueInference {
 
         if let Some(session_mutex) = self.sessions.get(&session_key) {
             // Préparer le tenseur d'entrée [1, 3]
-            if let Ok(input_tensor) = Tensor::from_array(([1, 3], vec![home_odds, draw_odds, away_odds])) {
+            // Shape as [usize; 2] required by ort rc.10 Tensor::from_array
+            if let Ok(input_tensor) = Tensor::from_array(([1usize, 3], vec![home_odds, draw_odds, away_odds])) {
                 // Exécuter l'inférence
                 if let Ok(mut session) = session_mutex.lock() {
                     if let Ok(outputs) = session.run(ort::inputs!["float_input" => input_tensor]) {
-                        // Récupérer le tenseur de probabilités (index 1)
-                        if let Ok((_shape, probs_slice)) = outputs[1].try_extract_tensor::<f32>() {
+                        // ort rc.10 API: try_extract_array returns ndarray::ArrayViewD
+                        // index 1 = probability tensor [1, 3] from XGBoost ONNX
+                        if let Ok(probs_array) = outputs[1].try_extract_array::<f32>() {
+                            let probs_slice = probs_array.as_slice().unwrap_or(&[]);
                             if probs_slice.len() >= 3 {
                                 prob_home_model = probs_slice[0];
                                 prob_draw_model = probs_slice[1];
