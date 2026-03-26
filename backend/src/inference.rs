@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use tracing::debug;
+use tracing::{debug, info, warn};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use ort::{session::builder::GraphOptimizationLevel, session::Session, value::Tensor};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Prediction {
@@ -19,12 +20,39 @@ pub struct Prediction {
 }
 
 pub struct MultiLeagueInference {
-    models_dir: String,
+    sessions: HashMap<String, Arc<Mutex<Session>>>,
 }
 
 impl MultiLeagueInference {
-    pub fn new(dir: String) -> Self {
-        Self { models_dir: dir }
+    pub fn new(models_dir: String) -> Self {
+        info!("Initializing ONNX Runtime sessions from: {}", models_dir);
+        
+        let mut sessions = HashMap::new();
+        let leagues = vec!["bundesliga", "premier_league", "ligue1", "serie_a", "laliga"];
+        
+        for league in leagues {
+            let model_path = format!("{}/{}.onnx", models_dir, league);
+            
+            // Initialiser la session ONNX
+            match Session::builder()
+                .unwrap()
+                .with_optimization_level(GraphOptimizationLevel::Level3)
+                .unwrap()
+                .with_intra_threads(1)
+                .unwrap()
+                .commit_from_file(&model_path)
+            {
+                Ok(session) => {
+                    info!("Successfully loaded model for {}", league);
+                    sessions.insert(league.to_string(), Arc::new(Mutex::new(session)));
+                },
+                Err(e) => {
+                    warn!("Failed to load model for {}: {}. Will fallback to default model if needed.", league, e);
+                }
+            }
+        }
+        
+        Self { sessions }
     }
 
     pub fn predict(
@@ -45,44 +73,67 @@ impl MultiLeagueInference {
         let total_implied = (1.0 / home_odds) + (1.0 / draw_odds) + (1.0 / away_odds);
         let overround = total_implied - 1.0;
 
-        // 2. Fair market probabilities (margin removed via normalization)
+        // 2. Fair market probabilities
         let prob_home_market = (1.0 / home_odds) / total_implied;
         let prob_draw_market = (1.0 / draw_odds) / total_implied;
         let prob_away_market = (1.0 / away_odds) / total_implied;
 
-        // 3. Model adjustment via deterministic hash of match_id + league
-        //    Three INDEPENDENT deltas — one per outcome (XGBoost-style multiclass output)
-        //    Each delta is drawn from a different bit-slice of the hash to avoid correlation
-        let mut hasher = DefaultHasher::new();
-        match_id.hash(&mut hasher);
-        league.hash(&mut hasher);
-        let h = hasher.finish();
+        // 3. Inference ONNX
+        let mut prob_home_model = prob_home_market;
+        let mut prob_draw_model = prob_draw_market;
+        let mut prob_away_model = prob_away_market;
+        let mut used_model = false;
 
-        // Max delta ±4pp per outcome (realistic XGBoost adjustment range)
-        let delta_home = ((h % 1000) as f32 / 1000.0 - 0.50) * 0.08;
-        let delta_draw = (((h >> 12) % 1000) as f32 / 1000.0 - 0.50) * 0.06;
-        let delta_away = (((h >> 24) % 1000) as f32 / 1000.0 - 0.50) * 0.08;
+        // Normaliser le nom de la ligue pour correspondre aux modèles
+        let normalized_league = league.to_lowercase().replace(" ", "_");
+        let session_key = if self.sessions.contains_key(&normalized_league) {
+            normalized_league.clone()
+        } else {
+            // Fallback sur premier_league si ligue non trouvée
+            "premier_league".to_string()
+        };
 
-        let lineup_penalty: f32 = if lineup_missing { -0.04 } else { 0.0 };
+        if let Some(session_mutex) = self.sessions.get(&session_key) {
+            // Préparer le tenseur d'entrée [1, 3]
+            if let Ok(input_tensor) = Tensor::from_array(([1, 3], vec![home_odds, draw_odds, away_odds])) {
+                // Exécuter l'inférence
+                if let Ok(mut session) = session_mutex.lock() {
+                    if let Ok(outputs) = session.run(ort::inputs!["float_input" => input_tensor]) {
+                        // Récupérer le tenseur de probabilités (index 1)
+                        if let Ok((_shape, probs_slice)) = outputs[1].try_extract_tensor::<f32>() {
+                            if probs_slice.len() >= 3 {
+                                prob_home_model = probs_slice[0];
+                                prob_draw_model = probs_slice[1];
+                                prob_away_model = probs_slice[2];
+                                used_model = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-        // 4. Raw model probabilities (before normalization)
-        let raw_home = (prob_home_market + delta_home + lineup_penalty).max(0.05_f32);
-        let raw_draw = (prob_draw_market + delta_draw).max(0.04_f32);
-        let raw_away = (prob_away_market + delta_away).max(0.04_f32);
+        // Si l'inférence a échoué, on garde les probabilités du marché
+        if !used_model {
+            warn!("ONNX inference failed for {} (match {}), falling back to market probabilities", league, match_id);
+        }
 
-        // 5. Softmax-style normalization: all three probs sum to exactly 1.0
-        //    This mirrors real XGBoost multiclass output (softmax objective)
-        let total_raw = raw_home + raw_draw + raw_away;
-        let prob_home_model = raw_home / total_raw;
-        let prob_draw_model = raw_draw / total_raw;
-        let prob_away_model = raw_away / total_raw;
+        // Ajustement pour les lineups
+        let lineup_penalty = if lineup_missing { -0.04 } else { 0.0 };
+        prob_home_model = (prob_home_model + lineup_penalty).max(0.01);
+        
+        // Re-normalisation softmax-style après pénalité
+        let total_prob = prob_home_model + prob_draw_model + prob_away_model;
+        prob_home_model /= total_prob;
+        prob_draw_model /= total_prob;
+        prob_away_model /= total_prob;
 
-        // 6. Edge per outcome = model_prob - fair_market_prob (in percentage points)
+        // 4. Edge per outcome
         let edge_home = (prob_home_model - prob_home_market) * 100.0;
         let edge_draw = (prob_draw_model - prob_draw_market) * 100.0;
         let edge_away = (prob_away_model - prob_away_market) * 100.0;
 
-        // 7. Best pick = outcome with highest edge
+        // 5. Best pick
         let (pick, edge, prob, pick_odds) = if edge_home >= edge_draw && edge_home >= edge_away {
             ("HOME", edge_home, prob_home_model, home_odds)
         } else if edge_draw >= edge_home && edge_draw >= edge_away {
@@ -91,14 +142,14 @@ impl MultiLeagueInference {
             ("AWAY", edge_away, prob_away_model, away_odds)
         };
 
-        // 8. CLV (Closing Line Value): positive if we beat the closing line
+        // 6. CLV
         let clv = if opening_odds > 0.0 && (opening_odds - pick_odds).abs() > 0.001 {
             ((1.0 / opening_odds) - (1.0 / pick_odds)) * 100.0
         } else {
             0.0
         };
 
-        // 9. Quarter Kelly Criterion, capped at 5% of bankroll
+        // 7. Kelly Criterion
         let b = pick_odds - 1.0;
         let p = prob;
         let q = 1.0 - p;
@@ -122,7 +173,7 @@ impl MultiLeagueInference {
             clv,
             overround: overround * 100.0,
             lineup_status,
-            model_version: format!("{}-v4-softmax", league),
+            model_version: format!("{}-onnx-v5", session_key),
         }
     }
 }
