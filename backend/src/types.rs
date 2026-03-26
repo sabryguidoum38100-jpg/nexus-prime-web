@@ -22,6 +22,10 @@ pub struct AiPickRequest {
     pub market: String,
     pub bankroll: f64,
     pub risk_profile: String,
+    // Optional odds for single-match inference via POST
+    pub home_odds: Option<f32>,
+    pub draw_odds: Option<f32>,
+    pub away_odds: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

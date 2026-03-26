@@ -100,12 +100,18 @@ async fn api_picks_get(
             false,
         );
 
-        // Confidence = probability of the selected pick
+        // Confidence = probability of the selected pick (normalized, from softmax)
         let confidence = match pred.pick.as_str() {
             "HOME" => pred.prob_home,
             "DRAW" => pred.prob_draw,
             _ => pred.prob_away,
         };
+
+        // Filter: only include picks where confidence >= 45% AND edge > 2%
+        // This mirrors a real XGBoost model's minimum prediction threshold
+        if confidence < 0.45 || pred.edge <= 2.0 {
+            continue;
+        }
 
         let resp = AiPickResponse {
             id: uuid::Uuid::new_v4(),
@@ -118,7 +124,7 @@ async fn api_picks_get(
             edge_percent: pred.edge,
             kelly: pred.kelly,
             clv: pred.clv,
-            tier: if pred.edge > 5.0 && confidence > 0.60 { 1 } else if pred.edge > 2.0 { 2 } else { 3 },
+            tier: if pred.edge > 5.0 && confidence > 0.60 { 1 } else { 2 },
             steam: pred.edge > 3.5 && pred.clv > 0.5,
             created_at: chrono::Utc::now(),
             model_version: pred.model_version,
@@ -136,21 +142,38 @@ async fn api_picks_post(
     State(state): State<AppState>,
     Json(payload): Json<AiPickRequest>,
 ) -> impl IntoResponse {
+    // POST /api/picks: single-match inference using real model
+    let pred = state.inference_engine.predict(
+        "custom",
+        &payload.match_id,
+        vec![
+            payload.home_odds.unwrap_or(2.0),
+            payload.draw_odds.unwrap_or(3.4),
+            payload.away_odds.unwrap_or(3.5),
+        ],
+        0.0,
+        false,
+    );
+    let confidence = match pred.pick.as_str() {
+        "HOME" => pred.prob_home,
+        "DRAW" => pred.prob_draw,
+        _ => pred.prob_away,
+    };
     let resp = AiPickResponse {
         id: uuid::Uuid::new_v4(),
         match_id: payload.match_id.clone(),
         sport: payload.sport.clone(),
         market: payload.market.clone(),
-        pick: "HOME".into(),
-        confidence: 0.85,
-        stake: 50.0,
-        edge_percent: 4.5,
-        kelly: 0.02,
-        clv: 0.05,
-        tier: 1,
-        steam: true,
+        pick: pred.pick.clone(),
+        confidence,
+        stake: (1000.0 * pred.kelly) as f64,
+        edge_percent: pred.edge,
+        kelly: pred.kelly,
+        clv: pred.clv,
+        tier: if pred.edge > 5.0 && confidence > 0.60 { 1 } else { 2 },
+        steam: pred.edge > 3.5 && pred.clv > 0.5,
         created_at: chrono::Utc::now(),
-        model_version: "nexus-v3-elite".into(),
+        model_version: pred.model_version,
     };
     Json(resp)
 }

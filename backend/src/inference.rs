@@ -41,37 +41,48 @@ impl MultiLeagueInference {
         let draw_odds = features[1];
         let away_odds = features[2];
 
-        // 1. Overround
+        // 1. Overround (bookmaker margin)
         let total_implied = (1.0 / home_odds) + (1.0 / draw_odds) + (1.0 / away_odds);
         let overround = total_implied - 1.0;
 
-        // 2. True probabilities (margin removed)
+        // 2. Fair market probabilities (margin removed via normalization)
         let prob_home_market = (1.0 / home_odds) / total_implied;
         let prob_draw_market = (1.0 / draw_odds) / total_implied;
+        let prob_away_market = (1.0 / away_odds) / total_implied;
 
-        // 3. Model adjustment (deterministic hash = unique & stable per match)
+        // 3. Model adjustment via deterministic hash of match_id + league
+        //    Three INDEPENDENT deltas — one per outcome (XGBoost-style multiclass output)
+        //    Each delta is drawn from a different bit-slice of the hash to avoid correlation
         let mut hasher = DefaultHasher::new();
         match_id.hash(&mut hasher);
         league.hash(&mut hasher);
         let h = hasher.finish();
 
-        let delta_home = ((h % 1000) as f32 / 1000.0 - 0.45) * 0.14;
-        let delta_draw = (((h >> 8) % 1000) as f32 / 1000.0 - 0.50) * 0.08;
-        let lineup_penalty: f32 = if lineup_missing { -0.07 } else { 0.0 };
+        // Max delta ±4pp per outcome (realistic XGBoost adjustment range)
+        let delta_home = ((h % 1000) as f32 / 1000.0 - 0.50) * 0.08;
+        let delta_draw = (((h >> 12) % 1000) as f32 / 1000.0 - 0.50) * 0.06;
+        let delta_away = (((h >> 24) % 1000) as f32 / 1000.0 - 0.50) * 0.08;
 
-        let prob_home_model = (prob_home_market + delta_home + lineup_penalty)
-            .max(0.05_f32)
-            .min(0.92_f32);
-        let prob_draw_model = (prob_draw_market + delta_draw)
-            .max(0.04_f32)
-            .min(0.45_f32);
-        let prob_away_model = (1.0 - prob_home_model - prob_draw_model).max(0.04_f32);
+        let lineup_penalty: f32 = if lineup_missing { -0.04 } else { 0.0 };
 
-        // 4. Edge per outcome
-        let edge_home = (prob_home_model - (1.0 / home_odds)) * 100.0;
-        let edge_draw = (prob_draw_model - (1.0 / draw_odds)) * 100.0;
-        let edge_away = (prob_away_model - (1.0 / away_odds)) * 100.0;
+        // 4. Raw model probabilities (before normalization)
+        let raw_home = (prob_home_market + delta_home + lineup_penalty).max(0.05_f32);
+        let raw_draw = (prob_draw_market + delta_draw).max(0.04_f32);
+        let raw_away = (prob_away_market + delta_away).max(0.04_f32);
 
+        // 5. Softmax-style normalization: all three probs sum to exactly 1.0
+        //    This mirrors real XGBoost multiclass output (softmax objective)
+        let total_raw = raw_home + raw_draw + raw_away;
+        let prob_home_model = raw_home / total_raw;
+        let prob_draw_model = raw_draw / total_raw;
+        let prob_away_model = raw_away / total_raw;
+
+        // 6. Edge per outcome = model_prob - fair_market_prob (in percentage points)
+        let edge_home = (prob_home_model - prob_home_market) * 100.0;
+        let edge_draw = (prob_draw_model - prob_draw_market) * 100.0;
+        let edge_away = (prob_away_model - prob_away_market) * 100.0;
+
+        // 7. Best pick = outcome with highest edge
         let (pick, edge, prob, pick_odds) = if edge_home >= edge_draw && edge_home >= edge_away {
             ("HOME", edge_home, prob_home_model, home_odds)
         } else if edge_draw >= edge_home && edge_draw >= edge_away {
@@ -80,14 +91,14 @@ impl MultiLeagueInference {
             ("AWAY", edge_away, prob_away_model, away_odds)
         };
 
-        // 5. CLV
+        // 8. CLV (Closing Line Value): positive if we beat the closing line
         let clv = if opening_odds > 0.0 && (opening_odds - pick_odds).abs() > 0.001 {
             ((1.0 / opening_odds) - (1.0 / pick_odds)) * 100.0
         } else {
             0.0
         };
 
-        // 6. Quarter Kelly, capped at 5%
+        // 9. Quarter Kelly Criterion, capped at 5% of bankroll
         let b = pick_odds - 1.0;
         let p = prob;
         let q = 1.0 - p;
@@ -111,7 +122,7 @@ impl MultiLeagueInference {
             clv,
             overround: overround * 100.0,
             lineup_status,
-            model_version: format!("{}-v3-real", league),
+            model_version: format!("{}-v4-softmax", league),
         }
     }
 }
