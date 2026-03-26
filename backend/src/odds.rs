@@ -65,6 +65,7 @@ impl OddsManager {
             client: Client::new(),
             cache: Arc::new(RwLock::new(OddsCache {
                 data: HashMap::new(),
+                // Initialisation forcée pour le premier appel
                 last_update: Instant::now() - Duration::from_secs(86400),
             })),
             odds_api_key: odds_key,
@@ -73,9 +74,11 @@ impl OddsManager {
 
     pub async fn get_odds(&self) -> anyhow::Result<Vec<MatchOdds>> {
         let mut cache = self.cache.write().await;
-        // Cache 2 hours as requested
-        if cache.last_update.elapsed() < Duration::from_secs(7200) && !cache.data.is_empty() {
-            debug!("Returning odds from 2h cache...");
+        
+        // Cache de 12 heures (43200 secondes) pour économiser le quota (500 req/mois)
+        // 5 ligues * 2 appels/jour = 10 appels/jour -> 300 appels/mois (Sécurisé)
+        if cache.last_update.elapsed() < Duration::from_secs(43200) && !cache.data.is_empty() {
+            debug!("Returning odds from 12h cache (Quota saver)...");
             return Ok(cache.data.values().cloned().collect());
         }
 
@@ -90,8 +93,9 @@ impl OddsManager {
             }
         }
 
+        // Si l'API échoue (ex: quota dépassé), on garde le cache indéfiniment
         if all_odds.is_empty() && !cache.data.is_empty() {
-            warn!("Fetch failed but cache exists, returning stale data.");
+            warn!("Fetch failed or empty, returning stale data to prevent crash.");
             return Ok(cache.data.values().cloned().collect());
         }
 
@@ -105,7 +109,11 @@ impl OddsManager {
             cache.data.insert(o.match_id.clone(), o);
         }
         
-        cache.last_update = Instant::now();
+        // Mise à jour du timestamp uniquement si on a récupéré des données avec succès
+        if !all_odds.is_empty() {
+            cache.last_update = Instant::now();
+        }
+        
         Ok(all_odds)
     }
 
@@ -155,7 +163,7 @@ impl OddsManager {
             "soccer_epl" => "premier_league".into(),
             "soccer_spain_la_liga" => "laliga".into(),
             "soccer_germany_bundesliga" => "bundesliga".into(),
-            "soccer_italy_serie_a" => "seriea".into(),
+            "soccer_italy_serie_a" => "serie_a".into(), // Corrigé pour correspondre au nom de fichier ONNX
             _ => "unknown".into(),
         }
     }
