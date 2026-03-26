@@ -12,11 +12,20 @@ interface Pick {
   stake: number;
   edge_percent: number;
   kelly: number;
+  clv?: number;
   tier: number;
   steam: boolean;
+  model_version?: string;
 }
 
-function PickModal({ pick, onClose }: { pick: Pick; onClose: () => void }) {
+// Kelly Criterion: f* = (bp - q) / b
+// b = decimal_odds - 1, p = win_prob, q = 1 - p
+function calcKellyStake(bankroll: number, kelly: number): number {
+  const fraction = Math.min(kelly, 0.25); // cap at 25% max
+  return Math.round(bankroll * fraction * 100) / 100;
+}
+
+function PickModal({ pick, onClose, bankroll = 1000 }: { pick: Pick; onClose: () => void; bankroll?: number }) {
   const conf = (pick.confidence * 100).toFixed(1);
   const tierLabel = pick.tier === 1 ? 'ELITE' : pick.tier === 2 ? 'PRO' : 'INFO';
   const tierGradient =
@@ -77,7 +86,7 @@ function PickModal({ pick, onClose }: { pick: Pick; onClose: () => void }) {
         {/* Stats grille */}
         <div className="grid grid-cols-2 gap-3 mb-5">
           {[
-            { label: '💰 Stake recommandé', value: `$${pick.stake.toFixed(2)}` },
+            { label: '💰 Stake recommandé', value: `€${calcKellyStake(bankroll, pick.kelly).toFixed(2)}` },
             { label: '📐 Kelly Criterion', value: `${(pick.kelly * 100).toFixed(1)}%` },
             { label: '📊 Edge détecté', value: `${pick.edge_percent.toFixed(2)}%` },
             { label: '🏆 Tier', value: tierLabel },
@@ -97,7 +106,7 @@ function PickModal({ pick, onClose }: { pick: Pick; onClose: () => void }) {
   );
 }
 
-export default function PicksSection() {
+export default function PicksSection({ bankroll = 1000 }: { bankroll?: number }) {
   const [picks, setPicks] = useState<Pick[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPick, setSelectedPick] = useState<Pick | null>(null);
@@ -238,7 +247,7 @@ export default function PicksSection() {
                   </div>
                   <div className="bg-gray-700 rounded-lg p-2">
                     <p className="text-gray-400">Stake</p>
-                    <p className="text-white font-bold">${pick.stake.toFixed(2)}</p>
+                    <p className="text-white font-bold">€{calcKellyStake(bankroll, pick.kelly).toFixed(0)}</p>
                   </div>
                   <div className="bg-gray-700 rounded-lg p-2">
                     <p className="text-gray-400">Kelly</p>
@@ -256,7 +265,7 @@ export default function PicksSection() {
       </div>
 
       <AnimatePresence>
-        {selectedPick && <PickModal pick={selectedPick} onClose={() => setSelectedPick(null)} />}
+        {selectedPick && <PickModal pick={selectedPick} onClose={() => setSelectedPick(null)} bankroll={bankroll} />}
       </AnimatePresence>
     </>
   );

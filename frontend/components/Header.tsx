@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 
 interface User {
+  id: string;
   name: string;
   email: string;
   plan: string;
+  bankroll: number;
 }
 
 function AuthModal({ mode, onClose, onSuccess }: {
@@ -18,6 +21,7 @@ function AuthModal({ mode, onClose, onSuccess }: {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [bankroll, setBankroll] = useState('1000');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,21 +31,29 @@ function AuthModal({ mode, onClose, onSuccess }: {
     if (!email || !password) { setError('Remplissez tous les champs.'); return; }
     if (tab === 'signup' && !name) { setError('Entrez votre nom.'); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    const raw = localStorage.getItem('nexus_users');
-    const users: Record<string, { name: string; password: string; plan: string }> = raw ? JSON.parse(raw) : {};
-    if (tab === 'login') {
-      if (!users[email] || users[email].password !== password) {
-        setError('Email ou mot de passe incorrect.'); setLoading(false); return;
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: tab === 'login' ? 'login' : 'register',
+          name,
+          email,
+          password,
+          bankroll: parseFloat(bankroll) || 1000,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Une erreur est survenue.');
+      } else {
+        onSuccess(data.user);
       }
-      onSuccess({ name: users[email].name, email, plan: users[email].plan });
-    } else {
-      if (users[email]) { setError('Email déjà utilisé.'); setLoading(false); return; }
-      users[email] = { name, password, plan: 'free' };
-      localStorage.setItem('nexus_users', JSON.stringify(users));
-      onSuccess({ name, email, plan: 'free' });
+    } catch {
+      setError('Erreur réseau. Réessayez.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -86,12 +98,23 @@ function AuthModal({ mode, onClose, onSuccess }: {
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition" />
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mot de passe"
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition" />
+          {tab === 'signup' && (
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Bankroll initiale (€)</label>
+              <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000"
+                min="10" max="1000000"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition" />
+            </div>
+          )}
           {error && <p className="text-red-400 text-sm bg-red-400/10 rounded-lg px-3 py-2">{error}</p>}
           <button type="submit" disabled={loading}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-black font-bold hover:shadow-lg hover:shadow-emerald-500/30 transition-all disabled:opacity-60">
             {loading ? '⏳ Chargement...' : tab === 'login' ? '🚀 Se connecter' : '✨ Créer mon compte'}
           </button>
         </form>
+        <p className="text-center text-xs text-gray-500 mt-4">
+          Authentification sécurisée · JWT httpOnly · Données chiffrées
+        </p>
       </motion.div>
     </motion.div>
   );
@@ -103,23 +126,35 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  const fetchUser = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth');
+      const data = await res.json();
+      if (data.user) setUser(data.user);
+    } catch {
+      // silently fail
+    }
+  }, []);
+
   useEffect(() => {
-    const stored = localStorage.getItem('nexus_user');
-    if (stored) setUser(JSON.parse(stored));
+    fetchUser();
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [fetchUser]);
 
   const handleSuccess = (u: User) => {
     setUser(u);
-    localStorage.setItem('nexus_user', JSON.stringify(u));
     setAuthModal(null);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    });
     setUser(null);
-    localStorage.removeItem('nexus_user');
     setMenuOpen(false);
   };
 
@@ -132,11 +167,18 @@ export default function Header() {
       >
         <nav className="container mx-auto px-4 py-4 flex justify-between items-center">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-400 rounded-lg flex items-center justify-center font-bold text-black">NP</div>
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Nexus Prime</h1>
-              <p className="text-xs text-gray-400">Pronos IA 2026</p>
-            </div>
+            <Link href="/" className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-400 rounded-lg flex items-center justify-center font-bold text-black">NP</div>
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Nexus Prime</h1>
+                <p className="text-xs text-gray-400">Pronos IA 2026</p>
+              </div>
+            </Link>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="hidden md:flex gap-6 items-center text-sm text-gray-400">
+            <Link href="/about" className="hover:text-emerald-400 transition">À propos</Link>
+            <Link href="/contact" className="hover:text-emerald-400 transition">Contact</Link>
           </motion.div>
 
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex gap-3 items-center">
@@ -162,6 +204,7 @@ export default function Header() {
                         <p className="text-white font-semibold text-sm">{user.name}</p>
                         <p className="text-gray-400 text-xs">{user.email}</p>
                         <p className="text-emerald-400 text-xs mt-1">Plan : {user.plan === 'free' ? 'Gratuit' : user.plan}</p>
+                        <p className="text-cyan-400 text-xs">Bankroll : €{user.bankroll?.toLocaleString()}</p>
                       </div>
                       <button onClick={handleLogout}
                         className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition">
