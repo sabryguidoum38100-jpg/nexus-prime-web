@@ -90,38 +90,48 @@ async fn api_picks_get(
     };
 
     let mut picks = Vec::new();
-    for m in matches {
+    for m in &matches {
+        let match_label = format!("{} vs {}", m.home_team, m.away_team);
         let pred = state.inference_engine.predict(
             &m.league,
-            vec![m.home_odds, m.draw_odds, m.away_odds], // Features match model training
+            &m.match_id,
+            vec![m.home_odds, m.draw_odds, m.away_odds],
             m.opening_odds_pinnacle.unwrap_or(m.home_odds),
-            m.home_odds,
-            false
+            false,
         );
+
+        // Confidence = probability of the selected pick
+        let confidence = match pred.pick.as_str() {
+            "HOME" => pred.prob_home,
+            "DRAW" => pred.prob_draw,
+            _ => pred.prob_away,
+        };
 
         let resp = AiPickResponse {
             id: uuid::Uuid::new_v4(),
-            match_id: format!("{} vs {}", m.home_team, m.away_team),
+            match_id: match_label,
             sport: "Soccer".into(),
             market: "1N2".into(),
-            pick: "HOME".into(),
-            confidence: pred.prob_home,
+            pick: pred.pick.clone(),
+            confidence,
             stake: (1000.0 * pred.kelly) as f64,
             edge_percent: pred.edge,
             kelly: pred.kelly,
             clv: pred.clv,
-            tier: if pred.edge > 4.0 { 1 } else { 2 },
-            steam: pred.edge > 3.0,
+            tier: if pred.edge > 5.0 && confidence > 0.60 { 1 } else if pred.edge > 2.0 { 2 } else { 3 },
+            steam: pred.edge > 3.5 && pred.clv > 0.5,
             created_at: chrono::Utc::now(),
             model_version: pred.model_version,
         };
-        
         picks.push(resp);
     }
 
+    // Sort by edge descending, return top 30 value bets
+    picks.sort_by(|a, b| b.edge_percent.partial_cmp(&a.edge_percent).unwrap_or(std::cmp::Ordering::Equal));
+    picks.truncate(30);
+
     Json(picks).into_response()
 }
-
 async fn api_picks_post(
     State(state): State<AppState>,
     Json(payload): Json<AiPickRequest>,
