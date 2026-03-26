@@ -1,8 +1,38 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
+interface HeroStats {
+  totalPicks: number;
+  avgConfidence: number;
+  avgEdge: number;
+}
+
 export default function Hero() {
+  const [stats, setStats] = useState<HeroStats>({ totalPicks: 0, avgConfidence: 0, avgEdge: 0 });
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://nexus-prime-web.onrender.com';
+    fetch(`${backendUrl}/api/picks`)
+      .then(r => r.json())
+      .then((data: Array<{ confidence: number; edge_percent: number }>) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        const total = data.length;
+        const avgConf = (data.reduce((s, p) => s + p.confidence, 0) / total) * 100;
+        const avgEdge = data.reduce((s, p) => s + p.edge_percent, 0) / total;
+        setStats({ totalPicks: total, avgConfidence: avgConf, avgEdge });
+        setLoaded(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <section className="pt-32 pb-20 px-4 relative overflow-hidden">
       {/* Gradient Background */}
@@ -38,11 +68,11 @@ export default function Hero() {
           transition={{ duration: 0.8, delay: 0.4 }}
           className="flex gap-4 justify-center flex-wrap"
         >
-          <button className="px-8 py-4 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 text-black font-bold text-lg hover:shadow-2xl hover:shadow-emerald-400/50 transition-all transform hover:scale-105">
-            Générer un Pick
+          <button onClick={() => scrollTo('picks-section')} className="px-8 py-4 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 text-black font-bold text-lg hover:shadow-2xl hover:shadow-emerald-400/50 transition-all transform hover:scale-105">
+            🎯 Générer un Pick
           </button>
-          <button className="px-8 py-4 rounded-lg border-2 border-emerald-400/50 text-emerald-400 font-bold text-lg hover:bg-emerald-400/10 transition-all">
-            Voir les Signaux
+          <button onClick={() => scrollTo('live-section')} className="px-8 py-4 rounded-lg border-2 border-emerald-400/50 text-emerald-400 font-bold text-lg hover:bg-emerald-400/10 transition-all">
+            📡 Voir les Signaux
           </button>
         </motion.div>
 
@@ -54,9 +84,9 @@ export default function Hero() {
           className="grid grid-cols-3 gap-8 mt-20 max-w-2xl mx-auto"
         >
           {[
-            { label: 'Picks Générés', value: '12.5K+' },
-            { label: 'Taux de Confiance', value: '78.3%' },
-            { label: 'Edge Moyen', value: '+4.2%' },
+            { label: 'Picks Générés', value: loaded ? `${stats.totalPicks}` : '…' },
+            { label: 'Taux de Confiance', value: loaded ? `${stats.avgConfidence.toFixed(1)}%` : '…' },
+            { label: 'Edge Moyen', value: loaded ? `+${stats.avgEdge.toFixed(2)}%` : '…' },
           ].map((stat, i) => (
             <div key={i} className="p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
               <p className="text-emerald-400 text-sm font-semibold">{stat.label}</p>
