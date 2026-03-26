@@ -11,10 +11,8 @@
     },
     "dependencies": {
         "@clerk/nextjs": "^7.0.7",
-        "@types/bcryptjs": "^2.4.6",
         "autoprefixer": "10.4.20",
         "axios": "1.7.9",
-        "bcryptjs": "^3.0.3",
         "framer-motion": "11.15.0",
         "jose": "^6.2.2",
         "next": "15.5.14",
