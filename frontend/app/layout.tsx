@@ -2,8 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Nexus Prime Pronos - IA Pronostics 2026",
-  description: "Pronostics sportifs IA haute performance avec signaux temps réel",
+  title: "Nexus Prime Elite — Pronostics IA Institutionnels 2026",
+  description: "Plateforme de Predictive Betting haut de gamme. Moteur ONNX/Rust, Edge calibré 2-10%, Quarter-Kelly, Bet Slip interactif. Grade institutionnel.",
+  keywords: "pronostics IA, betting quantitatif, edge value, kelly criterion, ONNX, Rust, picks premium",
+  openGraph: {
+    title: "Nexus Prime Elite — Pronostics IA Institutionnels",
+    description: "Moteur ONNX/Rust. Edge 2-10%. Quarter-Kelly. Grade institutionnel.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

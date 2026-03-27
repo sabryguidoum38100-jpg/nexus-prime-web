@@ -71,6 +71,27 @@ impl MultiLeagueInference {
         Self { sessions }
     }
 
+    /// Calibration Platt Scaling : blende prob modèle + prob marché (α=0.15)
+    /// Empêche les dérives irréalistes (edge 30%+)
+    fn calibrate(prob_model: f32, prob_market: f32) -> f32 {
+        const ALPHA: f32 = 0.15;
+        let blended = (1.0 - ALPHA) * prob_market + ALPHA * prob_model;
+        blended.clamp(0.01, 0.99)
+    }
+
+    /// Edge institutionnel : Edge = (prob_IA × cote) - 1, clampé [0%, 10%]
+    fn compute_edge(prob: f32, odds: f32) -> f32 {
+        let raw_edge = (prob * odds) - 1.0;
+        (raw_edge * 100.0).clamp(0.0, 10.0)
+    }
+
+    /// Quarter-Kelly : Mise = Edge / (cote - 1) × 0.25, cap 5%
+    fn compute_quarter_kelly(edge_pct: f32, odds: f32) -> f32 {
+        let b = odds - 1.0;
+        if b <= 0.0 || edge_pct <= 0.0 { return 0.0; }
+        (edge_pct / 100.0 / b * 0.25).clamp(0.0, 0.05)
+    }
+
     pub async fn predict(
         &self,
         league: &str,
@@ -128,17 +149,26 @@ impl MultiLeagueInference {
             warn!("ONNX inference failed for {} (match {}), falling back to market probabilities", league, match_id);
         }
 
-        let lineup_penalty = if lineup_missing { -0.04 } else { 0.0 };
-        prob_home_model = (prob_home_model + lineup_penalty).max(0.01);
-        
-        let total_prob = prob_home_model + prob_draw_model + prob_away_model;
-        prob_home_model /= total_prob;
-        prob_draw_model /= total_prob;
-        prob_away_model /= total_prob;
+        // Pénalité lineup
+        if lineup_missing {
+            prob_home_model = (prob_home_model - 0.04).max(0.01);
+        }
 
-        let edge_home = (prob_home_model - prob_home_market) * 100.0;
-        let edge_draw = (prob_draw_model - prob_draw_market) * 100.0;
-        let edge_away = (prob_away_model - prob_away_market) * 100.0;
+        // === CALIBRATION PLATT SCALING ===
+        let prob_home_cal = Self::calibrate(prob_home_model, prob_home_market);
+        let prob_draw_cal = Self::calibrate(prob_draw_model, prob_draw_market);
+        let prob_away_cal = Self::calibrate(prob_away_model, prob_away_market);
+
+        // Renormalisation
+        let total_cal = prob_home_cal + prob_draw_cal + prob_away_cal;
+        prob_home_model = prob_home_cal / total_cal;
+        prob_draw_model = prob_draw_cal / total_cal;
+        prob_away_model = prob_away_cal / total_cal;
+
+        // === EDGE INSTITUTIONNEL : Edge = (prob_IA × cote) - 1 ===
+        let edge_home = Self::compute_edge(prob_home_model, home_odds);
+        let edge_draw = Self::compute_edge(prob_draw_model, draw_odds);
+        let edge_away = Self::compute_edge(prob_away_model, away_odds);
 
         let (pick, edge, prob, pick_odds) = if edge_home >= edge_draw && edge_home >= edge_away {
             ("HOME", edge_home, prob_home_model, home_odds)
@@ -154,11 +184,9 @@ impl MultiLeagueInference {
             0.0
         };
 
-        let b = pick_odds - 1.0;
-        let p = prob;
-        let q = 1.0 - p;
-        let kelly_full = if b > 0.0 { ((b * p) - q) / b } else { 0.0 };
-        let kelly = (kelly_full * 0.25).max(0.0).min(0.05);
+        // === QUARTER-KELLY : Mise = Edge / (cote - 1) × 0.25 ===
+        let kelly = Self::compute_quarter_kelly(edge, pick_odds);
+        let _ = prob; // prob utilisé pour sélection pick
 
         let lineup_status = if lineup_missing {
             "KEY_PLAYERS_ABSENT".to_string()
@@ -177,7 +205,7 @@ impl MultiLeagueInference {
             clv,
             overround: overround * 100.0,
             lineup_status,
-            model_version: format!("{}-onnx-v5", session_key),
+            model_version: format!("{}-onnx-v6-calibrated", session_key),
         }
     }
 }

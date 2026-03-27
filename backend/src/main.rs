@@ -77,7 +77,7 @@ async fn health() -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "ok",
         "service": "nexus-prime-pronos",
-        "version": "0.3.1-elite-real-async",
+        "version": "0.4.0-nexus-prime-calibrated",
         "timestamp": chrono::Utc::now().to_rfc3339()
     }))
 }
@@ -112,7 +112,7 @@ async fn api_picks_get(
             _ => pred.prob_away,
         };
 
-        if confidence < 0.45 || pred.edge <= 2.0 {
+        if confidence < 0.45 || pred.edge <= 1.5 {
             continue;
         }
 
@@ -127,8 +127,8 @@ async fn api_picks_get(
             edge_percent: pred.edge,
             kelly: pred.kelly,
             clv: pred.clv,
-            tier: if pred.edge > 5.0 && confidence > 0.60 { 1 } else { 2 },
-            steam: pred.edge > 3.5 && pred.clv > 0.5,
+            tier: if pred.edge >= 6.0 && confidence > 0.60 { 1 } else if pred.edge >= 3.0 { 2 } else { 3 },
+            steam: pred.edge >= 2.0 && pred.clv > 0.3,
             created_at: chrono::Utc::now(),
             model_version: pred.model_version,
         };
@@ -136,7 +136,7 @@ async fn api_picks_get(
     }
 
     picks.sort_by(|a, b| b.edge_percent.partial_cmp(&a.edge_percent).unwrap_or(std::cmp::Ordering::Equal));
-    picks.truncate(30);
+    picks.truncate(25);
 
     Json(picks).into_response()
 }
@@ -172,8 +172,8 @@ async fn api_picks_post(
         edge_percent: pred.edge,
         kelly: pred.kelly,
         clv: pred.clv,
-        tier: if pred.edge > 5.0 && confidence > 0.60 { 1 } else { 2 },
-        steam: pred.edge > 3.5 && pred.clv > 0.5,
+            tier: if pred.edge >= 6.0 && confidence > 0.60 { 1 } else if pred.edge >= 3.0 { 2 } else { 3 },
+            steam: pred.edge >= 2.0 && pred.clv > 0.3,
         created_at: chrono::Utc::now(),
         model_version: pred.model_version,
     };

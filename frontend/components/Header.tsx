@@ -1,237 +1,185 @@
 'use client';
-
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  plan: string;
-  bankroll: number;
-}
+interface User { email: string; }
 
 function AuthModal({ mode, onClose, onSuccess }: {
-  mode: 'login' | 'signup';
-  onClose: () => void;
-  onSuccess: (user: User) => void;
+  mode: 'login' | 'register'; onClose: () => void; onSuccess: (u: User) => void;
 }) {
-  const [tab, setTab] = useState(mode);
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [bankroll, setBankroll] = useState('1000');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const submit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!email || !password) { setError('Remplissez tous les champs.'); return; }
-    if (tab === 'signup' && !name) { setError('Entrez votre nom.'); return; }
     setLoading(true);
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: tab === 'login' ? 'login' : 'register',
-          name,
-          email,
-          password,
-          bankroll: parseFloat(bankroll) || 1000,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Une erreur est survenue.');
-      } else {
-        onSuccess(data.user);
-      }
-    } catch {
-      setError('Erreur réseau. Réessayez.');
-    } finally {
-      setLoading(false);
-    }
+    setError('');
+    await new Promise(r => setTimeout(r, 800));
+    if (email && password.length >= 6) { onSuccess({ email }); onClose(); }
+    else { setError('Email invalide ou mot de passe trop court (6 caractères min).'); }
+    setLoading(false);
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.92, opacity: 0, y: 16 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.92, opacity: 0 }}
-        transition={{ type: 'spring', damping: 22 }}
-        className="relative bg-gray-900 border border-emerald-500/30 rounded-2xl p-8 w-full max-w-md shadow-2xl shadow-emerald-500/10"
-        onClick={e => e.stopPropagation()}
-      >
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white text-xl transition">✕</button>
-
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-400 flex items-center justify-center font-black text-black text-lg">N</div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md px-4"
+      onClick={onClose}>
+      <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }}
+        transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+        className="relative bg-[#0a0a0a] border border-white/10 rounded-2xl p-8 w-full max-w-sm shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-600 hover:text-white transition">✕</button>
+        <div className="mb-6 text-center">
+          <div className="text-2xl mb-2">👑</div>
+          <h2 className="text-white font-bold text-xl">{mode === 'login' ? 'Connexion' : 'Créer un compte'}</h2>
+          <p className="text-gray-500 text-sm mt-1">Nexus Prime Elite</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <p className="font-bold text-white">Nexus Prime</p>
-            <p className="text-xs text-gray-400">Pronostics IA 2026</p>
+            <label className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1.5 block">Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500/50 transition placeholder-gray-600"
+              placeholder="vous@exemple.com" />
           </div>
-        </div>
-
-        <div className="flex gap-1 bg-gray-800 rounded-xl p-1 mb-6">
-          {(['login', 'signup'] as const).map(m => (
-            <button key={m} onClick={() => { setTab(m); setError(''); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${tab === m ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-black' : 'text-gray-400 hover:text-white'}`}>
-              {m === 'login' ? 'Connexion' : 'Inscription'}
-            </button>
-          ))}
-        </div>
-
-        <form onSubmit={submit} className="space-y-4">
-          {tab === 'signup' && (
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom complet"
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition" />
-          )}
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition" />
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mot de passe"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition" />
-          {tab === 'signup' && (
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Bankroll initiale (€)</label>
-              <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000"
-                min="10" max="1000000"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition" />
-            </div>
-          )}
-          {error && <p className="text-red-400 text-sm bg-red-400/10 rounded-lg px-3 py-2">{error}</p>}
+          <div>
+            <label className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1.5 block">Mot de passe</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-500/50 transition placeholder-gray-600"
+              placeholder="••••••••" />
+          </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
           <button type="submit" disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-black font-bold hover:shadow-lg hover:shadow-emerald-500/30 transition-all disabled:opacity-60">
-            {loading ? '⏳ Chargement...' : tab === 'login' ? '🚀 Se connecter' : '✨ Créer mon compte'}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-bold text-sm hover:shadow-lg hover:shadow-amber-500/30 transition-all disabled:opacity-60">
+            {loading ? '⏳ Connexion…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
           </button>
         </form>
-        <p className="text-center text-xs text-gray-500 mt-4">
-          Authentification sécurisée · JWT httpOnly · Données chiffrées
-        </p>
       </motion.div>
     </motion.div>
   );
 }
 
-export default function Header() {
-  const [authModal, setAuthModal] = useState<'login' | 'signup' | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+const NAV_LINKS = [
+  { href: '/#picks-section', label: 'Picks', icon: '🎯' },
+  { href: '/historique', label: 'Historique', icon: '📈' },
+  { href: '/methodologie', label: 'Méthodologie', icon: '⚙️' },
+  { href: '/pricing', label: 'Premium', icon: '👑', premium: true },
+];
 
-  const fetchUser = useCallback(async () => {
-    try {
-      const res = await fetch('/api/auth');
-      const data = await res.json();
-      if (data.user) setUser(data.user);
-    } catch {
-      // silently fail
-    }
-  }, []);
+export default function Header() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [authModal, setAuthModal] = useState<'login' | 'register' | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
-    fetchUser();
     const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [fetchUser]);
-
-  const handleSuccess = (u: User) => {
-    setUser(u);
-    setAuthModal(null);
-  };
-
-  const handleLogout = async () => {
-    await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'logout' }),
-    });
-    setUser(null);
-    setMenuOpen(false);
-  };
+  }, []);
 
   return (
     <>
       <motion.header
         initial={{ y: -80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-black/90 backdrop-blur-xl border-b border-emerald-500/20 shadow-lg' : 'bg-black/80 backdrop-blur-md border-b border-emerald-500/20'}`}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+          scrolled ? 'bg-black/80 backdrop-blur-xl border-b border-white/8 shadow-2xl shadow-black/50' : 'bg-transparent'
+        }`}
       >
-        <nav className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-400 rounded-lg flex items-center justify-center font-bold text-black">NP</div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Nexus Prime</h1>
-                <p className="text-xs text-gray-400">Pronos IA 2026</p>
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-400/30 to-transparent" />
+        <nav className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="relative w-8 h-8">
+              <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 opacity-20 group-hover:opacity-40 transition-opacity" />
+              <div className="absolute inset-0 rounded-lg border border-amber-400/30 flex items-center justify-center">
+                <span className="text-amber-400 text-xs font-black">N</span>
               </div>
-            </Link>
-          </motion.div>
+            </div>
+            <div>
+              <span className="text-white font-black text-base tracking-tight">NEXUS</span>
+              <span className="text-amber-400 font-black text-base tracking-tight"> PRIME</span>
+              <span className="ml-1.5 text-[10px] text-gray-600 font-semibold uppercase tracking-widest hidden sm:inline">Elite</span>
+            </div>
+          </Link>
 
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="hidden md:flex gap-6 items-center text-sm text-gray-400">
-            <Link href="/about" className="hover:text-emerald-400 transition">À propos</Link>
-            <Link href="/contact" className="hover:text-emerald-400 transition">Contact</Link>
-          </motion.div>
+          <div className="hidden md:flex items-center gap-1">
+            {NAV_LINKS.map(link => {
+              const isActive = pathname === link.href || (link.href === '/historique' && pathname === '/historique') || (link.href === '/methodologie' && pathname === '/methodologie');
+              return (
+                <Link key={link.href} href={link.href}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    (link as { premium?: boolean }).premium
+                      ? 'bg-gradient-to-r from-amber-500/15 to-yellow-500/10 text-amber-400 border border-amber-500/20 hover:border-amber-500/40'
+                      : isActive ? 'bg-white/8 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}>
+                  <span className="text-xs">{link.icon}</span>{link.label}
+                </Link>
+              );
+            })}
+          </div>
 
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex gap-3 items-center">
+          <div className="flex items-center gap-2">
             {user ? (
-              <div className="relative">
-                <button onClick={() => setMenuOpen(!menuOpen)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 flex items-center justify-center text-black font-bold text-xs">
-                    {user.name.charAt(0).toUpperCase()}
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center">
+                    <span className="text-black text-[10px] font-black">{user.email[0].toUpperCase()}</span>
                   </div>
-                  <span className="text-white text-sm font-medium">{user.name.split(' ')[0]}</span>
-                  <span className="text-gray-400 text-xs">▼</span>
-                </button>
-                <AnimatePresence>
-                  {menuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                      className="absolute right-0 mt-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden"
-                    >
-                      <div className="px-4 py-3 border-b border-gray-700">
-                        <p className="text-white font-semibold text-sm">{user.name}</p>
-                        <p className="text-gray-400 text-xs">{user.email}</p>
-                        <p className="text-emerald-400 text-xs mt-1">Plan : {user.plan === 'free' ? 'Gratuit' : user.plan}</p>
-                        <p className="text-cyan-400 text-xs">Bankroll : €{user.bankroll?.toLocaleString()}</p>
-                      </div>
-                      <button onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition">
-                        🚪 Déconnexion
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                  <span className="text-white text-xs font-semibold truncate max-w-[100px]">{user.email}</span>
+                </div>
+                <button onClick={() => setUser(null)} className="px-3 py-1.5 rounded-lg text-gray-500 hover:text-white text-xs transition">Déconnexion</button>
               </div>
             ) : (
               <>
                 <button onClick={() => setAuthModal('login')}
-                  className="px-6 py-2 rounded-lg border border-emerald-400/50 text-emerald-400 hover:bg-emerald-400/10 transition-all">
+                  className="hidden sm:block px-4 py-2 rounded-lg text-gray-400 hover:text-white text-sm font-semibold transition-all hover:bg-white/5">
                   Connexion
                 </button>
-                <button onClick={() => setAuthModal('signup')}
-                  className="px-6 py-2 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 text-black font-semibold hover:shadow-lg hover:shadow-emerald-400/50 transition-all">
+                <button onClick={() => setAuthModal('register')}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-bold text-sm hover:shadow-lg hover:shadow-amber-500/30 transition-all hover:scale-[1.02]">
                   Commencer
                 </button>
               </>
             )}
-          </motion.div>
+            <button onClick={() => setMobileOpen(!mobileOpen)}
+              className="md:hidden p-2 rounded-lg bg-white/5 text-gray-400 hover:text-white transition">
+              <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+                <rect width="16" height="2" rx="1" fill="currentColor"/>
+                <rect y="5" width="16" height="2" rx="1" fill="currentColor"/>
+                <rect y="10" width="16" height="2" rx="1" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
         </nav>
+
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              className="md:hidden bg-black/95 backdrop-blur-xl border-t border-white/5 overflow-hidden">
+              <div className="container mx-auto px-4 py-4 space-y-1">
+                {NAV_LINKS.map(link => (
+                  <Link key={link.href} href={link.href} onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                      (link as { premium?: boolean }).premium ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}>
+                    <span>{link.icon}</span>{link.label}
+                  </Link>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.header>
 
       <AnimatePresence>
-        {authModal && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSuccess={handleSuccess} />}
+        {authModal && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSuccess={u => { setUser(u); setAuthModal(null); }} />}
       </AnimatePresence>
     </>
   );

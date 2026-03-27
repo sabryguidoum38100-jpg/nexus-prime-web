@@ -55,8 +55,8 @@ export default function Home() {
         position="top-right"
         toastOptions={{
           style: {
-            background: '#111827',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
+            background: '#0a0a0a',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
             color: '#fff',
           },
         }}
@@ -64,13 +64,13 @@ export default function Home() {
       <Header />
       <Hero />
       <div id="picks-section" className="container mx-auto px-4 py-20">
-        <div className="flex gap-4 mb-12 border-b border-emerald-500/30">
+        <div className="flex gap-4 mb-12 border-b border-white/8">
           <motion.button
             onClick={() => setActiveTab('picks')}
             className={`px-6 py-3 font-semibold transition-all ${
               activeTab === 'picks'
-                ? 'text-emerald-400 border-b-2 border-emerald-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-amber-400 border-b-2 border-amber-400'
+                : 'text-gray-500 hover:text-white'
             }`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -81,8 +81,8 @@ export default function Home() {
             onClick={() => { setActiveTab('live'); document.getElementById('live-section')?.scrollIntoView({ behavior: 'smooth' }); }}
             className={`px-6 py-3 font-semibold transition-all ${
               activeTab === 'live'
-                ? 'text-cyan-400 border-b-2 border-cyan-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-emerald-400 border-b-2 border-emerald-400'
+                : 'text-gray-500 hover:text-white'
             }`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
