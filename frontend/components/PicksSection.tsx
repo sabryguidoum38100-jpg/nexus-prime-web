@@ -266,7 +266,7 @@ function BetSlipPanel({ items, bankroll, onRemove, onClear, onClose }: {
   return (
     <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-      className="fixed right-0 top-0 h-full w-full max-w-xs z-50 bg-[#080808] border-l border-white/8 flex flex-col shadow-2xl">
+      className="fixed right-0 top-0 h-full w-full max-w-xs z-[45] bg-[#080808] border-l border-white/8 flex flex-col shadow-2xl">
       <div className="px-5 py-4 border-b border-white/8 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-white font-bold">Bet Slip</span>
@@ -405,7 +405,7 @@ export default function PicksSection({ bankroll: initBankroll = 1000, isPremium 
   const addToSlip = (pick: Pick) => {
     if (betSlip.find(i => i.pick.id === pick.id)) return;
     setBetSlip(p => [...p, { pick }]);
-    setShowBetSlip(true);
+    // Ne pas ouvrir automatiquement — l'utilisateur ouvre via le FAB
   };
   const removeFromSlip = (id: string) => setBetSlip(p => p.filter(i => i.pick.id !== id));
   const inSlip = (id: string) => betSlip.some(i => i.pick.id === id);
@@ -551,18 +551,18 @@ export default function PicksSection({ bankroll: initBankroll = 1000, isPremium 
         {showBetSlip && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60" onClick={() => setShowBetSlip(false)} />
+              className="fixed inset-0 z-[44] bg-black/60" onClick={() => setShowBetSlip(false)} />
             <BetSlipPanel items={betSlip} bankroll={bankroll}
               onRemove={removeFromSlip} onClear={() => setBetSlip([])} onClose={() => setShowBetSlip(false)} />
           </>
         )}
       </AnimatePresence>
 
-      {/* FAB mobile */}
+      {/* FAB — visible sur mobile ET desktop */}
       {betSlip.length > 0 && !showBetSlip && (
         <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }}
           onClick={() => setShowBetSlip(true)}
-          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black shadow-2xl shadow-amber-500/40 hover:scale-105 transition-transform md:hidden">
+          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black shadow-2xl shadow-amber-500/40 hover:scale-105 transition-transform">
           🎯 Bet Slip
           <span className="w-5 h-5 rounded-full bg-black/20 text-white text-xs flex items-center justify-center">{betSlip.length}</span>
         </motion.button>
