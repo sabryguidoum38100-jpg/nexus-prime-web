@@ -19,8 +19,14 @@ function AuthModal({ mode, onClose, onSuccess }: {
     setLoading(true);
     setError('');
     await new Promise(r => setTimeout(r, 800));
-    if (email && password.length >= 6) { onSuccess({ email }); onClose(); }
-    else { setError('Email invalide ou mot de passe trop court (6 caractères min).'); }
+    if (!email || !email.includes('@')) {
+      setError('Adresse email invalide.');
+    } else if (password.length < 6) {
+      setError('Mot de passe trop court (6 caractères minimum).');
+    } else {
+      onSuccess({ email });
+      onClose();
+    }
     setLoading(false);
   };
 
@@ -55,7 +61,7 @@ function AuthModal({ mode, onClose, onSuccess }: {
           {error && <p className="text-red-400 text-xs">{error}</p>}
           <button type="submit" disabled={loading}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-bold text-sm hover:shadow-lg hover:shadow-amber-500/30 transition-all disabled:opacity-60">
-            {loading ? '⏳ Connexion…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+            {loading ? '⏳ Traitement…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
           </button>
         </form>
       </motion.div>

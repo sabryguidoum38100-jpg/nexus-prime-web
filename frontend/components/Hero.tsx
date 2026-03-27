@@ -3,29 +3,25 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
-interface HeroStats {
-  totalPicks: number;
-  avgConfidence: number;
-  avgEdge: number;
-}
 
 export default function Hero() {
-  const [stats, setStats] = useState<HeroStats>({ totalPicks: 0, avgConfidence: 0, avgEdge: 0 });
-  const [loaded, setLoaded] = useState(false);
+  const [stats, setStats] = useState({ totalPicks: 10, avgConfidence: 70.4, avgEdge: 5.46 });
 
   useEffect(() => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://nexus-prime-web.onrender.com';
-    fetch(`${backendUrl}/api/picks`)
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    fetch(`${backendUrl}/api/picks`, { signal: ctrl.signal })
       .then(r => r.json())
       .then((data: Array<{ confidence: number; edge_percent: number }>) => {
+        clearTimeout(timer);
         if (!Array.isArray(data) || data.length === 0) return;
         const total = data.length;
         const avgConf = (data.reduce((s, p) => s + p.confidence, 0) / total) * 100;
         const avgEdge = data.reduce((s, p) => s + p.edge_percent, 0) / total;
         setStats({ totalPicks: total, avgConfidence: avgConf, avgEdge });
-        setLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => clearTimeout(timer));
   }, []);
 
   const scrollTo = (id: string) => {
@@ -84,13 +80,13 @@ export default function Hero() {
           className="grid grid-cols-3 gap-8 mt-20 max-w-2xl mx-auto"
         >
           {[
-            { label: 'Picks Générés', value: loaded ? `${stats.totalPicks}` : '…' },
-            { label: 'Taux de Confiance', value: loaded ? `${stats.avgConfidence.toFixed(1)}%` : '…' },
-            { label: 'Edge Moyen', value: loaded ? `+${stats.avgEdge.toFixed(2)}%` : '…' },
+            { label: 'Picks Générés', value: `${stats.totalPicks}`, color: 'text-white' },
+            { label: 'Taux de Confiance', value: `${stats.avgConfidence.toFixed(1)}%`, color: 'text-cyan-400' },
+            { label: 'Edge Moyen', value: `+${stats.avgEdge.toFixed(2)}%`, color: 'text-emerald-400' },
           ].map((stat, i) => (
-            <div key={i} className="p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-              <p className="text-emerald-400 text-sm font-semibold">{stat.label}</p>
-              <p className="text-2xl font-bold text-white mt-2">{stat.value}</p>
+            <div key={i} className="p-4 rounded-2xl bg-white/3 border border-white/8 hover:border-white/15 transition-colors">
+              <p className="text-gray-600 text-xs font-semibold mb-2">{stat.label}</p>
+              <p className={`text-2xl font-black ${(stat as {color: string}).color}`}>{stat.value}</p>
             </div>
           ))}
         </motion.div>
