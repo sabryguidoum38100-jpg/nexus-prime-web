@@ -1,4 +1,5 @@
 'use client';
+import Header from '@/components/Header';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -99,7 +100,9 @@ const colorMap: Record<string, { border: string; bg: string; text: string; badge
 
 export default function MethodologiePage() {
   return (
-    <main className="min-h-screen bg-[#000000] pt-24 pb-16 px-4">
+    <>
+      <Header />
+      <main className="min-h-screen bg-[#000000] pt-24 pb-16 px-4">
       <div className="container mx-auto max-w-4xl">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-12">
@@ -175,5 +178,6 @@ export default function MethodologiePage() {
         </motion.div>
       </div>
     </main>
+    </>
   );
 }
