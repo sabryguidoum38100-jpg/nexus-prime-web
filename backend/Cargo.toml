@@ -30,6 +30,8 @@ rand = "=0.8.5"
 dotenvy = "0.15"
 ort = { version = "=2.0.0-rc.10", features = ["ndarray"] }
 ndarray = "0.15.6"
+rusqlite = { version = "0.31", features = ["bundled"] }
+tokio-rusqlite = "0.5"
 
 
 

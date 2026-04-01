@@ -4,6 +4,7 @@ use uuid::Uuid;
 use tokio::sync::broadcast;
 use axum::http::HeaderValue;
 use std::sync::Arc;
+use tokio_rusqlite::Connection;
 use crate::odds::OddsManager;
 use crate::inference::MultiLeagueInference;
 
@@ -13,6 +14,9 @@ pub struct AppState {
     pub dark_theme_header: HeaderValue,
     pub odds_manager: Arc<OddsManager>,
     pub inference_engine: Arc<MultiLeagueInference>,
+    pub db: Arc<Connection>,
+    pub http_client: reqwest::Client,
+    pub groq_api_key: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +36,9 @@ pub struct AiPickRequest {
 pub struct AiPickResponse {
     pub id: Uuid,
     pub match_id: String,
+    pub home_team: String,
+    pub away_team: String,
+    pub competition: String,
     pub sport: String,
     pub market: String,
     pub pick: String,
@@ -42,6 +49,9 @@ pub struct AiPickResponse {
     pub clv: f32,
     pub tier: u8,
     pub steam: bool,
+    pub home_form: String,
+    pub away_form: String,
+    pub analysis: String,
     pub created_at: DateTime<Utc>,
     pub model_version: String,
 }

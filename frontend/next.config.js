@@ -13,6 +13,18 @@ const nextConfig = {
   },
   serverRuntimeConfig: {
     ODDS_API_KEY: process.env.ODDS_API_KEY || 'df5fb65e1a3d0ab7904eed933dc7765a',
+    GROQ_API_KEY: process.env.GROQ_API_KEY || '',
+  },
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, OPTIONS' },
+        ],
+      },
+    ];
   },
 };
 
