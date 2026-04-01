@@ -11,6 +11,9 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'https://nexus-prime-web.onrender.com',
   },
+  serverRuntimeConfig: {
+    ODDS_API_KEY: process.env.ODDS_API_KEY || 'df5fb65e1a3d0ab7904eed933dc7765a',
+  },
 };
 
 module.exports = withPWA(nextConfig);
