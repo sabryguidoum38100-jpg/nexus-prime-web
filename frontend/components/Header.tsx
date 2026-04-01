@@ -228,6 +228,7 @@ const NAV_LINKS = [
   { href: '/#picks-section', label: 'Picks', icon: '🎯' },
   { href: '/historique', label: 'Historique', icon: '📈' },
   { href: '/methodologie', label: 'Méthodologie', icon: '⚙️' },
+  { href: '/chat', label: 'Assistant IA', icon: '🤖', chat: true },
   { href: '/pricing', label: 'Premium', icon: '👑', premium: true },
 ];
 
@@ -287,6 +288,10 @@ export default function Header() {
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                     (link as { premium?: boolean }).premium
                       ? 'bg-gradient-to-r from-amber-500/15 to-yellow-500/10 text-amber-400 border border-amber-500/20 hover:border-amber-500/40'
+                      : (link as { chat?: boolean }).chat
+                      ? isActive
+                        ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
+                        : 'text-cyan-500/70 hover:text-cyan-400 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20'
                       : isActive ? 'bg-white/8 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}>
                   <span className="text-xs">{link.icon}</span>{link.label}
@@ -345,7 +350,11 @@ export default function Header() {
                 {NAV_LINKS.map(link => (
                   <Link key={link.href} href={link.href} onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
-                      (link as { premium?: boolean }).premium ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      (link as { premium?: boolean }).premium
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        : (link as { chat?: boolean }).chat
+                        ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}>
                     <span>{link.icon}</span>{link.label}
                   </Link>

@@ -20,16 +20,17 @@ mod steam;
 mod inference;
 mod db;
 mod tests;
+mod chat;
 
 use crate::types::{AiPickRequest, AiPickResponse, LiveSignal, AppState};
 use crate::ws::handle_ws;
 use crate::odds::OddsManager;
 use crate::inference::MultiLeagueInference;
 use crate::db::{init_db, find_similar_picks, generate_groq_analysis, save_pick, get_pick_analysis, PickHistoryRow};
+use crate::chat::chat_handler;
 
 // Formes récentes simulées par équipe (en attendant API-Football)
 fn get_team_form(team: &str) -> String {
-    // Hash simple pour avoir une forme cohérente par équipe
     let chars = ['V', 'N', 'D'];
     let seed: usize = team.bytes().map(|b| b as usize).sum::<usize>();
     (0..5).map(|i| chars[(seed + i * 7) % 3]).collect()
@@ -58,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     let db = Arc::new(conn);
 
     let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build()?;
 
     let odds_manager = Arc::new(OddsManager::new(odds_api_key));
@@ -88,14 +89,16 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health))
         .route("/api/picks", get(api_picks_get))
         .route("/api/picks", post(api_picks_post))
+        .route("/api/chat", post(chat_handler))
         .route("/ws/live", get(ws_upgrade))
         .layer(cors)
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state)
+        .into_make_service_with_connect_info::<SocketAddr>();
 
     let addr: SocketAddr = format!("0.0.0.0:{}", port).parse()?;
-    info!(%addr, "Nexus Prime Elite v0.5.0-RAG starting...");
+    info!(%addr, "Nexus Prime Elite v0.6.0-CHAT starting...");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
@@ -106,7 +109,7 @@ async fn health() -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "ok",
         "service": "nexus-prime-pronos",
-        "version": "0.5.0-rag-groq-llama4",
+        "version": "0.6.0-chat-sse",
         "timestamp": chrono::Utc::now().to_rfc3339()
     }))
 }
@@ -161,7 +164,6 @@ async fn api_picks_get(
                 cached
             }
             None => {
-                // Générer l'analyse RAG (une seule fois)
                 let similar = find_similar_picks(
                     &state.db,
                     pred.edge as f64,
@@ -185,7 +187,6 @@ async fn api_picks_get(
                     &similar,
                 ).await;
 
-                // Sauvegarder en cache
                 let row = PickHistoryRow {
                     id: pick_id.clone(),
                     home: m.home_team.clone(),
@@ -241,7 +242,6 @@ async fn api_picks_get(
             model_version: pred.model_version,
         };
 
-        // Broadcast signal live
         let signal = LiveSignal::from_response(&resp);
         let _ = state.tx_signals.send(signal);
 
