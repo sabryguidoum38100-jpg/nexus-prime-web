@@ -1,19 +1,20 @@
 'use client';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 export default function Hero() {
   const scrollToPicks = () => {
-    document.getElementById('picks-section')?.scrollIntoView({ behavior: 'smooth' });
+    if (typeof document !== 'undefined') {
+      document.getElementById('picks-section')?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   return (
     <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
-      {/* Background Decorative Elements */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-amber-500/5 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[120px]" />
       </div>
-
       <div className="container mx-auto px-4 relative z-10 text-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -24,18 +25,15 @@ export default function Hero() {
             <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
             Moteur ONNX v6.2 — Live Data
           </span>
-          
           <h1 className="text-5xl md:text-8xl font-black text-white leading-[0.9] tracking-tighter mb-8">
             L&apos;IA QUI DÉTECTE <br />
             <span className="bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500 bg-clip-text text-transparent">
               L&apos;EDGE DU MARCHÉ
             </span>
           </h1>
-          
           <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed">
             Nexus Prime utilise des modèles de <span className="text-white font-bold">Deep Learning</span> pour identifier les inefficacités des bookmakers en temps réel. Précision institutionnelle pour parieurs exigeants.
           </p>
-
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
             <button 
               onClick={scrollToPicks}
@@ -43,12 +41,10 @@ export default function Hero() {
             >
               Accéder aux Picks
             </button>
-            <Link href="/pricing" className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-white/5 border border-white/10 text-white font-bold text-lg hover:bg-white/10 transition-all">
+            <Link href="/login" className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-white/5 border border-white/10 text-white font-bold text-lg hover:bg-white/10 transition-all">
               Pass Nexus Premium
             </Link>
           </div>
-
-          {/* Trust Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto pt-12 border-t border-white/5">
             <div>
               <p className="text-white font-black text-2xl">94.2%</p>
@@ -72,5 +68,3 @@ export default function Hero() {
     </section>
   );
 }
-
-import Link from 'next/link';
