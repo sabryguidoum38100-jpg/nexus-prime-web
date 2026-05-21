@@ -1,10 +1,10 @@
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use std::time::{Duration, Instant};
-use reqwest::Client;
-use tracing::{debug, info, warn};
+use tracing::{info, debug, warn};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MatchOdds {
@@ -27,6 +27,7 @@ struct OddsApiResponse {
     sport_key: String,
     home_team: String,
     away_team: String,
+    commence_time: String,
     bookmakers: Vec<Bookmaker>,
 }
 
@@ -65,7 +66,6 @@ impl OddsManager {
             client: Client::new(),
             cache: Arc::new(RwLock::new(OddsCache {
                 data: HashMap::new(),
-                // Initialisation forcée pour le premier appel
                 last_update: Instant::now() - Duration::from_secs(86400),
             })),
             odds_api_key: odds_key,
@@ -75,16 +75,19 @@ impl OddsManager {
     pub async fn get_odds(&self) -> anyhow::Result<Vec<MatchOdds>> {
         let mut cache = self.cache.write().await;
         
-        // Cache de 12 heures (43200 secondes) pour économiser le quota (500 req/mois)
-        // 5 ligues * 2 appels/jour = 10 appels/jour -> 300 appels/mois (Sécurisé)
-        if cache.last_update.elapsed() < Duration::from_secs(43200) && !cache.data.is_empty() {
-            debug!("Returning odds from 12h cache (Quota saver)...");
+        if cache.last_update.elapsed() < Duration::from_secs(3600) && !cache.data.is_empty() {
+            debug!("Returning odds from 1h cache...");
             return Ok(cache.data.values().cloned().collect());
         }
 
-        info!("Fetching real odds from The Odds API (Pinnacle filtering)...");
+        info!("Fetching fresh odds from The Odds API...");
         let leagues = ["soccer_france_ligue_one", "soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga", "soccer_italy_serie_a"];
         let mut all_odds = Vec::new();
+
+        if self.odds_api_key.is_empty() || self.odds_api_key == "YOUR_ODDS_API_KEY" {
+            warn!("Missing ODDS_API_KEY, using cache only.");
+            return Ok(cache.data.values().cloned().collect());
+        }
 
         for sport in leagues {
             match self.fetch_league_odds(sport).await {
@@ -93,13 +96,10 @@ impl OddsManager {
             }
         }
 
-        // Si l'API échoue (ex: quota dépassé), on garde le cache indéfiniment
         if all_odds.is_empty() && !cache.data.is_empty() {
-            warn!("Fetch failed or empty, returning stale data to prevent crash.");
             return Ok(cache.data.values().cloned().collect());
         }
 
-        // Update cache with CLV logic (opening/closing)
         for mut o in all_odds.clone() {
             if let Some(existing) = cache.data.get(&o.match_id) {
                 o.opening_odds_pinnacle = existing.opening_odds_pinnacle.or(Some(o.home_odds));
@@ -108,13 +108,12 @@ impl OddsManager {
             }
             cache.data.insert(o.match_id.clone(), o);
         }
-        
-        // Mise à jour du timestamp uniquement si on a récupéré des données avec succès
+
         if !all_odds.is_empty() {
             cache.last_update = Instant::now();
         }
-        
-        Ok(all_odds)
+
+        Ok(cache.data.values().cloned().collect())
     }
 
     async fn fetch_league_odds(&self, sport: &str) -> anyhow::Result<Vec<MatchOdds>> {
@@ -122,8 +121,8 @@ impl OddsManager {
             "https://api.the-odds-api.com/v4/sports/{}/odds/?apiKey={}&regions=eu&markets=h2h&bookmakers=pinnacle",
             sport, self.odds_api_key
         );
-
-        let response = self.client.get(url).send().await?;
+        
+        let response = self.client.get(url).timeout(Duration::from_secs(10)).send().await?;
         if !response.status().is_success() {
             return Err(anyhow::anyhow!("API Error: {}", response.status()));
         }
@@ -163,7 +162,7 @@ impl OddsManager {
             "soccer_epl" => "premier_league".into(),
             "soccer_spain_la_liga" => "laliga".into(),
             "soccer_germany_bundesliga" => "bundesliga".into(),
-            "soccer_italy_serie_a" => "serie_a".into(), // Corrigé pour correspondre au nom de fichier ONNX
+            "soccer_italy_serie_a" => "serie_a".into(),
             _ => "unknown".into(),
         }
     }
