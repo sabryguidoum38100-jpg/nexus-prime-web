@@ -2,81 +2,83 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface LiveSignal {
+interface Signal {
   id: string;
   match: string;
   league: string;
   pick: string;
   odds: number;
-  edge_percent: number;
   confidence: number;
-  tier: 'ELITE' | 'PRO' | 'INFO';
+  edge_percent: number;
+  tier: 'ELITE' | 'VALUE' | 'SMART';
   steam: boolean;
   created_at: string;
 }
 
-const SIGNAL_POOL: Omit<LiveSignal, 'id' | 'created_at'>[] = [
-  { match: 'Arsenal vs Bournemouth', league: 'Premier League', pick: 'HOME', odds: 1.47, edge_percent: 2.23, confidence: 0.695, tier: 'INFO', steam: false },
-  { match: 'Mallorca vs Real Madrid', league: 'La Liga', pick: 'AWAY', odds: 1.38, edge_percent: 4.18, confidence: 0.731, tier: 'PRO', steam: false },
-  { match: 'PSG vs Toulouse', league: 'Ligue 1', pick: 'HOME', odds: 1.34, edge_percent: 2.67, confidence: 0.766, tier: 'INFO', steam: false },
-  { match: 'Leverkusen vs Wolfsburg', league: 'Bundesliga', pick: 'HOME', odds: 1.28, edge_percent: 2.10, confidence: 0.789, tier: 'INFO', steam: false },
-  { match: 'Lazio vs Parma', league: 'Serie A', pick: 'HOME', odds: 1.91, edge_percent: 2.06, confidence: 0.534, tier: 'INFO', steam: false },
-  { match: 'Real Sociedad vs Levante', league: 'La Liga', pick: 'HOME', odds: 1.65, edge_percent: 3.20, confidence: 0.625, tier: 'PRO', steam: false },
-  { match: 'Strasbourg vs Nice', league: 'Ligue 1', pick: 'HOME', odds: 1.94, edge_percent: 3.15, confidence: 0.532, tier: 'PRO', steam: false },
-  { match: 'Brentford vs Everton', league: 'Premier League', pick: 'HOME', odds: 2.38, edge_percent: 2.83, confidence: 0.432, tier: 'INFO', steam: false },
-  { match: 'West Ham vs Wolves', league: 'Premier League', pick: 'AWAY', odds: 4.90, edge_percent: 2.02, confidence: 0.208, tier: 'INFO', steam: false },
-  { match: 'Lille vs RC Lens', league: 'Ligue 1', pick: 'DRAW', odds: 3.65, edge_percent: 2.24, confidence: 0.280, tier: 'INFO', steam: false },
-  { match: 'Bayern vs RB Leipzig', league: 'Bundesliga', pick: 'HOME', odds: 1.55, edge_percent: 6.80, confidence: 0.740, tier: 'ELITE', steam: true },
-  { match: 'Inter vs Juventus', league: 'Serie A', pick: 'HOME', odds: 2.05, edge_percent: 7.40, confidence: 0.720, tier: 'ELITE', steam: true },
-];
-
 const TIER_STYLE = {
-  ELITE: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
-  PRO:   { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-  INFO:  { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-gray-500/20' },
+  ELITE: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20' },
+  VALUE: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
+  SMART: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/20' },
 };
 
-function genId() { return Math.random().toString(36).slice(2, 10); }
-function makeSignal(base: Omit<LiveSignal, 'id' | 'created_at'>): LiveSignal {
-  return { ...base, id: genId(), created_at: new Date().toISOString() };
-}
+const LIVE_DATA_POOL = [
+  { match: "Real Madrid vs Man City", league: "Ligue des Champions", odds: 1.95 },
+  { match: "Arsenal vs Bayern", league: "Ligue des Champions", odds: 2.10 },
+  { match: "PSG vs Barcelona", league: "Ligue des Champions", odds: 1.85 },
+  { match: "Liverpool vs Atalanta", league: "Europa League", odds: 1.45 },
+  { match: "Leverkusen vs West Ham", league: "Europa League", odds: 1.65 },
+  { match: "Milan vs Roma", league: "Europa League", odds: 2.30 },
+];
 
 export default function LiveSignals() {
-  const [signals, setSignals] = useState<LiveSignal[]>([]);
-  const [status, setStatus] = useState<'live' | 'connecting'>('connecting');
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [status, setStatus] = useState<'connecting' | 'live'>('connecting');
+  const [mounted, setMounted] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const usedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    const initTimer = setTimeout(() => {
-      setStatus('live');
-      const initial = SIGNAL_POOL.slice(0, 3).map(makeSignal);
-      setSignals(initial);
-      initial.forEach(s => usedRef.current.add(s.match));
-    }, 1500);
-    return () => clearTimeout(initTimer);
+    setMounted(true);
+    const timeout = setTimeout(() => setStatus('live'), 2000);
+    return () => clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
     if (status !== 'live') return;
+
+    const makeSignal = (base: any): Signal => ({
+      id: Math.random().toString(36).substring(2, 9),
+      ...base,
+      pick: Math.random() > 0.5 ? 'Over 2.5' : 'Home ML',
+      confidence: 0.75 + Math.random() * 0.15,
+      edge_percent: 2.5 + Math.random() * 4.5,
+      tier: Math.random() > 0.7 ? 'ELITE' : Math.random() > 0.4 ? 'VALUE' : 'SMART',
+      steam: Math.random() > 0.8,
+      created_at: new Date().toISOString(),
+    });
+
     const addSignal = () => {
-      const available = SIGNAL_POOL.filter(s => !usedRef.current.has(s.match));
+      const available = LIVE_DATA_POOL.filter(p => !usedRef.current.has(p.match));
       if (available.length === 0) { usedRef.current.clear(); return; }
       const base = available[Math.floor(Math.random() * available.length)];
       const newSignal = makeSignal(base);
       usedRef.current.add(base.match);
       setSignals(prev => [newSignal, ...prev].slice(0, 8));
     };
+
     const tick = () => {
       addSignal();
       timerRef.current = setTimeout(tick, 8000 + Math.random() * 4000);
     };
-    timerRef.current = setTimeout(tick, 8000 + Math.random() * 4000);
+
+    timerRef.current = setTimeout(tick, 2000);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [status]);
 
+  if (!mounted) return <div className="min-h-[300px]" />;
+
   return (
-    <div className="w-full bg-[#0a0a0a] rounded-2xl p-6 border border-white/8">
+    <div className="w-full bg-[#0a0a0a] rounded-2xl p-6 border border-white/8 shadow-2xl">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-white font-bold text-lg">Signaux Live</h2>
@@ -146,7 +148,7 @@ export default function LiveSignals() {
       {signals.length > 0 && (
         <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
           <p className="text-gray-700 text-xs">{signals.length} signaux actifs</p>
-          <a href="/pricing" className="text-amber-400 text-xs font-semibold hover:text-amber-300 transition">Signaux temps réel → Pass Nexus</a>
+          <a href="/login" className="text-amber-400 text-xs font-semibold hover:text-amber-300 transition">Signaux temps réel → Pass Nexus</a>
         </div>
       )}
     </div>
