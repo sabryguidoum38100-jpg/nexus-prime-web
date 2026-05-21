@@ -28,6 +28,8 @@ const LIVE_DATA_POOL = [
   { match: "Liverpool vs Atalanta", league: "Europa League", odds: 1.45 },
   { match: "Leverkusen vs West Ham", league: "Europa League", odds: 1.65 },
   { match: "Milan vs Roma", league: "Europa League", odds: 2.30 },
+  { match: "Marseille vs Benfica", league: "Europa League", odds: 2.45 },
+  { match: "Dortmund vs Atletico", league: "Ligue des Champions", odds: 2.20 },
 ];
 
 export default function LiveSignals() {
@@ -63,47 +65,45 @@ export default function LiveSignals() {
       const base = available[Math.floor(Math.random() * available.length)];
       const newSignal = makeSignal(base);
       usedRef.current.add(base.match);
-      setSignals(prev => [newSignal, ...prev].slice(0, 8));
+      setSignals(prev => [newSignal, ...prev].slice(0, 10));
     };
 
     const tick = () => {
       addSignal();
-      timerRef.current = setTimeout(tick, 8000 + Math.random() * 4000);
+      timerRef.current = setTimeout(tick, 6000 + Math.random() * 4000);
     };
 
-    timerRef.current = setTimeout(tick, 2000);
+    timerRef.current = setTimeout(tick, 1500);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [status]);
 
-  if (!mounted) return <div className="min-h-[300px]" />;
+  if (!mounted) return <div className="min-h-[400px]" />;
 
   return (
-    <div className="w-full bg-[#0a0a0a] rounded-2xl p-6 border border-white/8 shadow-2xl">
-      <div className="flex items-center justify-between mb-5">
+    <div className="w-full bg-[#0a0a0a] rounded-2xl p-6 border border-white/8 shadow-2xl relative overflow-hidden">
+      {/* Scanline Effect */}
+      <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+      
+      <div className="flex items-center justify-between mb-6 relative z-10">
         <div>
-          <h2 className="text-white font-bold text-lg">Signaux Live</h2>
-          <p className="text-gray-600 text-xs mt-0.5">Mises à jour temps réel · Moteur ONNX v6</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <div className={`w-2.5 h-2.5 rounded-full ${status === 'live' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            <div className={`absolute inset-0 rounded-full ${status === 'live' ? 'bg-emerald-500' : 'bg-amber-500'} animate-ping opacity-50`} />
+          <h2 className="text-white font-black text-xl tracking-tighter uppercase">Flux Inférence Live</h2>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">ONNX_ENGINE_V6 // SECURE_STREAM</p>
           </div>
-          <span className={`text-xs font-semibold ${status === 'live' ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {status === 'live' ? 'En direct' : 'Connexion...'}
+        </div>
+        <div className="px-3 py-1.5 rounded bg-white/5 border border-white/10">
+          <span className="text-amber-500 font-black text-[10px] tracking-widest uppercase">
+            {status === 'live' ? 'SYSTEM_READY' : 'CONNECTING...'}
           </span>
         </div>
       </div>
-      <div className="space-y-3 min-h-[200px]">
+
+      <div className="space-y-2 min-h-[300px] relative z-10">
         {status === 'connecting' ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-10 h-10 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin mb-4" />
-            <p className="text-gray-500 text-sm">Connexion au flux live...</p>
-          </div>
-        ) : signals.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="text-3xl mb-3">📡</div>
-            <p className="text-gray-500 text-sm">En attente de signaux...</p>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-12 h-12 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-4" />
+            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Initializing Neural Stream...</p>
           </div>
         ) : (
           <AnimatePresence mode="popLayout">
@@ -111,32 +111,28 @@ export default function LiveSignals() {
               const t = TIER_STYLE[signal.tier];
               return (
                 <motion.div key={signal.id}
-                  initial={{ opacity: 0, x: 20, scale: 0.97 }}
+                  initial={{ opacity: 0, x: 10, scale: 0.98 }}
                   animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -20, scale: 0.97 }}
-                  transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-                  className="bg-white/3 border border-white/8 rounded-xl p-4 hover:border-emerald-500/20 transition-colors">
-                  <div className="flex items-start justify-between gap-3">
+                  exit={{ opacity: 0, x: -10, scale: 0.98 }}
+                  className="bg-white/2 border border-white/5 rounded-lg p-3 hover:bg-white/5 transition-colors group">
+                  <div className="flex items-center justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-black border ${t.bg} ${t.text} ${t.border}`}>{signal.tier}</span>
-                        {signal.steam && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/10 border border-red-500/20 text-red-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />STEAM
-                          </span>
-                        )}
-                        <span className="text-gray-700 text-xs ml-auto">
-                          {new Date(signal.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black border ${t.bg} ${t.text} ${t.border}`}>{signal.tier}</span>
+                        <span className="text-gray-700 text-[8px] font-bold uppercase">{signal.league}</span>
                       </div>
-                      <p className="text-white font-semibold text-sm truncate">{signal.match}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">{signal.league} · {signal.pick} @ {signal.odds.toFixed(2)}</p>
+                      <p className="text-white font-black text-xs truncate tracking-tight uppercase">{signal.match}</p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-emerald-400 font-black text-base">{signal.edge_percent.toFixed(1)}%</p>
-                      <p className="text-gray-600 text-xs">Edge</p>
-                      <p className="text-cyan-400 font-bold text-sm mt-1">{(signal.confidence * 100).toFixed(0)}%</p>
-                      <p className="text-gray-600 text-xs">Conf.</p>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <p className="text-emerald-400 font-black text-xs">+{signal.edge_percent.toFixed(1)}%</p>
+                        <p className="text-gray-700 text-[8px] font-bold uppercase">Edge</p>
+                      </div>
+                      <div className="w-px h-6 bg-white/10" />
+                      <div className="text-right min-w-[40px]">
+                        <p className="text-white font-black text-xs">@ {signal.odds.toFixed(2)}</p>
+                        <p className="text-gray-700 text-[8px] font-bold uppercase">Odds</p>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -145,12 +141,22 @@ export default function LiveSignals() {
           </AnimatePresence>
         )}
       </div>
-      {signals.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-          <p className="text-gray-700 text-xs">{signals.length} signaux actifs</p>
-          <a href="/login" className="text-amber-400 text-xs font-semibold hover:text-amber-300 transition">Signaux temps réel → Pass Nexus</a>
+      
+      <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between relative z-10">
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col">
+            <span className="text-white font-black text-xs">{signals.length}</span>
+            <span className="text-gray-700 text-[8px] font-bold uppercase">Signals</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-emerald-500 font-black text-xs">100%</span>
+            <span className="text-gray-700 text-[8px] font-bold uppercase">Uptime</span>
+          </div>
         </div>
-      )}
+        <Link href="/login" className="px-4 py-2 rounded bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest hover:bg-white transition-colors">
+          Unlock Full Stream
+        </Link>
+      </div>
     </div>
   );
 }
