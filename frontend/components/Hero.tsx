@@ -1,120 +1,76 @@
 'use client';
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
 export default function Hero() {
-  const [stats, setStats] = useState({ totalPicks: 10, avgConfidence: 70.4, avgEdge: 5.46 });
-
-  useEffect(() => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://nexus-prime-web.onrender.com';
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    fetch(`${backendUrl}/api/picks`, { signal: ctrl.signal })
-      .then(r => r.json())
-      .then((data: Array<{ confidence: number; edge_percent: number }>) => {
-        clearTimeout(timer);
-        if (!Array.isArray(data) || data.length === 0) return;
-        const total = data.length;
-        const avgConf = (data.reduce((s, p) => s + p.confidence, 0) / total) * 100;
-        const avgEdge = data.reduce((s, p) => s + p.edge_percent, 0) / total;
-        setStats({ totalPicks: total, avgConfidence: avgConf, avgEdge });
-      })
-      .catch(() => clearTimeout(timer));
-  }, []);
-
-  const scrollTo = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToPicks = () => {
+    document.getElementById('picks-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
-    <section className="pt-36 pb-24 px-4 relative overflow-hidden">
-      {/* Ambient glow background */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 left-1/4 w-[300px] h-[300px] bg-emerald-500/4 rounded-full blur-3xl" />
+    <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-amber-500/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[120px]" />
       </div>
 
-      <div className="container mx-auto text-center relative z-10 max-w-4xl">
-
-        {/* Badge ONNX */}
+      <div className="container mx-auto px-4 relative z-10 text-center">
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 mb-8"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-amber-400 text-xs font-bold tracking-wider">MOTEUR ONNX v6 · CALIBRATION PLATT · LIVE</span>
-        </motion.div>
-
-        {/* Titre */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.1 }}
-        >
-          <h1 className="text-5xl md:text-7xl font-black mb-6 leading-tight tracking-tight">
-            <span className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent">
-              Pronostics IA
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black tracking-[0.2em] text-amber-500 uppercase mb-6">
+            <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
+            Moteur ONNX v6.2 — Live Data
+          </span>
+          
+          <h1 className="text-5xl md:text-8xl font-black text-white leading-[0.9] tracking-tighter mb-8">
+            L&apos;IA QUI DÉTECTE <br />
+            <span className="bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500 bg-clip-text text-transparent">
+              L&apos;EDGE DU MARCHÉ
             </span>
-            <br />
-            <span className="text-white">Prédiction 2026</span>
           </h1>
-        </motion.div>
+          
+          <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed">
+            Nexus Prime utilise des modèles de <span className="text-white font-bold">Deep Learning</span> pour identifier les inefficacités des bookmakers en temps réel. Précision institutionnelle pour parieurs exigeants.
+          </p>
 
-        {/* Sous-titre */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.25 }}
-          className="text-lg text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed"
-        >
-          Moteur IA multi-feature haute performance. Signaux temps réel.{' '}
-          <span className="text-white font-semibold">Edge détecté automatiquement.</span>
-        </motion.p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
+            <button 
+              onClick={scrollToPicks}
+              className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black text-lg hover:shadow-[0_0_40px_rgba(245,158,11,0.3)] transition-all transform hover:scale-105"
+            >
+              Accéder aux Picks
+            </button>
+            <Link href="/pricing" className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-white/5 border border-white/10 text-white font-bold text-lg hover:bg-white/10 transition-all">
+              Pass Nexus Premium
+            </Link>
+          </div>
 
-        {/* Boutons CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
-          className="flex gap-4 justify-center flex-wrap mb-16"
-        >
-          <button
-            onClick={() => scrollTo('picks-section')}
-            className="px-8 py-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black text-base hover:shadow-2xl hover:shadow-amber-500/40 transition-all transform hover:scale-105"
-          >
-            🎯 Voir les Picks
-          </button>
-          <button
-            onClick={() => scrollTo('live-section')}
-            className="px-8 py-4 rounded-xl border border-white/15 text-gray-300 font-semibold text-base hover:bg-white/5 hover:border-white/30 hover:text-white transition-all"
-          >
-            📡 Signaux Live
-          </button>
-        </motion.div>
-
-        {/* Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.6 }}
-          className="grid grid-cols-3 gap-4 max-w-2xl mx-auto"
-        >
-          {[
-            { label: 'Picks Générés', value: `${stats.totalPicks}`, color: 'text-white', sub: 'Aujourd\'hui' },
-            { label: 'Taux de Confiance', value: `${stats.avgConfidence.toFixed(1)}%`, color: 'text-cyan-400', sub: 'Moyenne IA' },
-            { label: 'Edge Moyen', value: `+${stats.avgEdge.toFixed(2)}%`, color: 'text-emerald-400', sub: 'Calibré Platt' },
-          ].map((stat, i) => (
-            <div key={i} className="p-5 rounded-2xl bg-white/3 border border-white/8 hover:border-white/15 transition-all hover:bg-white/5">
-              <p className="text-gray-600 text-xs font-semibold mb-2 uppercase tracking-wider">{stat.label}</p>
-              <p className={`text-3xl font-black ${stat.color} mb-1`}>{stat.value}</p>
-              <p className="text-gray-700 text-xs">{stat.sub}</p>
+          {/* Trust Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto pt-12 border-t border-white/5">
+            <div>
+              <p className="text-white font-black text-2xl">94.2%</p>
+              <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest">CLV Beat Rate</p>
             </div>
-          ))}
+            <div>
+              <p className="text-emerald-400 font-black text-2xl">+12.4%</p>
+              <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest">ROI Mensuel</p>
+            </div>
+            <div>
+              <p className="text-white font-black text-2xl">24/7</p>
+              <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest">Monitoring Live</p>
+            </div>
+            <div>
+              <p className="text-amber-500 font-black text-2xl">Elite</p>
+              <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest">Standard Algo</p>
+            </div>
+          </div>
         </motion.div>
       </div>
     </section>
   );
 }
+
+import Link from 'next/link';
