@@ -3,12 +3,15 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PickCard from './PickCard';
 import LiveSignals from './LiveSignals';
+import PickModal from './PickModal';
 
 export default function PicksSection() {
   const [activeTab, setActiveTab] = useState<'ai' | 'live'>('ai');
   const [picks, setPicks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [bankroll, setBankroll] = useState(1000);
+  const [selectedPick, setSelectedPick] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -21,6 +24,11 @@ export default function PicksSection() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  const openModal = (pick: any) => {
+    setSelectedPick(pick);
+    setIsModalOpen(true);
+  };
 
   if (!mounted) return null;
 
@@ -122,25 +130,17 @@ export default function PicksSection() {
               </div>
 
               {/* Grid de Picks */}
-              {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1,2,3,4,5,6].map(i => (
-                    <div key={i} className="h-64 bg-[#0a0a0a] border border-white/5 rounded-3xl animate-pulse" />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {picks.map((pick) => (
-                    <PickCard 
-                      key={pick.id} 
-                      pick={pick} 
-                      bankroll={bankroll}
-                      onOpen={() => {}} 
-                      onAdd={() => {}} 
-                    />
-                  ))}
-                </div>
-              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {picks.map((pick) => (
+                  <PickCard 
+                    key={pick.id} 
+                    pick={pick} 
+                    bankroll={bankroll}
+                    onOpen={() => openModal(pick)} 
+                    onAdd={() => {}} 
+                  />
+                ))}
+              </div>
 
               {/* Section Premium Locked */}
               <div className="mt-12 pt-12 border-t border-white/5">
@@ -178,6 +178,13 @@ export default function PicksSection() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        <PickModal 
+          pick={selectedPick} 
+          isOpen={isModalOpen} 
+          onClose={() => setIsModalOpen(false)} 
+          bankroll={bankroll}
+        />
       </div>
     </section>
   );
